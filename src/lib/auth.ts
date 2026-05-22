@@ -1,4 +1,6 @@
 import { PrismaAdapter } from "@auth/prisma-adapter"
+import { redirect } from "next/navigation"
+import type { Session } from "next-auth"
 import NextAuth from "next-auth"
 import Auth0 from "next-auth/providers/auth0"
 import Credentials from "next-auth/providers/credentials"
@@ -6,7 +8,7 @@ import { prisma } from "./prisma"
 
 const debugAuth = process.env.DEBUG_AUTH === "true"
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+const nextAuth = NextAuth({
   adapter: PrismaAdapter(prisma),
   providers: debugAuth
     ? [
@@ -37,3 +39,29 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
 })
+
+export const handlers = nextAuth.handlers
+export const signOut = nextAuth.signOut
+
+export async function auth(): Promise<Session | null> {
+  if (debugAuth) {
+    return {
+      user: {
+        id: "debug-user",
+        email: "dev@localhost",
+        name: "Dev User",
+      },
+      expires: new Date(Date.now() + 1000 * 60 * 60 * 24).toISOString(),
+    }
+  }
+
+  return nextAuth.auth()
+}
+
+export async function signIn(provider?: string, options?: { redirectTo?: string }) {
+  if (debugAuth) {
+    redirect(options?.redirectTo ?? "/catalogue")
+  }
+
+  return nextAuth.signIn(provider, options)
+}

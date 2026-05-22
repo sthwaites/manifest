@@ -22,6 +22,8 @@ Work through the build beats in order, keeping each step testable. Start with th
 3. Install dependencies and generate Prisma client.
 4. Run tests/build and fix bootstrap issues.
 5. Continue through auth, App Server streaming, persistence, rollback/reset, image generation, and browser verification.
+6. Implement Beat 4 lib layer: event bus, Codex App Server process wrapper, moderation.
+7. Implement Beat 4 UI layer: WebSocket-backed feature request, AgentStream, and catalogue tabs.
 
 ## Progress
 
@@ -30,3 +32,6 @@ Work through the build beats in order, keeping each step testable. Start with th
 - [x] Add product seed data, baseline page, and sandbox catalogue UI.
 - [x] Install dependencies and generate Prisma client.
 - [x] Run tests/build and fix bootstrap issues.
+- [x] Beat 4 lib tests written and confirmed red.
+- [x] Beat 4 lib implementation passing.
+- [x] Beat 4 UI tests and implementation passing.

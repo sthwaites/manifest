@@ -4,6 +4,7 @@ const nextConfig = {
     return [
       { source: "/sandbox-preview/:path*", destination: "http://localhost:3001/:path*" },
       { source: "/_sandbox-images/:path*", destination: "http://localhost:3001/images/:path*" },
+      { source: "/api/ws", destination: "http://localhost:3002/api/ws" },
     ]
   },
 }
