@@ -1,0 +1,12 @@
+{
+  "name": "manifest-dev-plugin",
+  "version": "1.0.0",
+  "description": "Scaffold, test, and ship features for the Manifest self-modifying product catalogue. Bundles the scaffold-feature, add-tests, and ship-it skills plus MCP server config for OpenAI Docs and Context7. Install once — everyone on the team gets the same Codex setup.",
+  "author": "Steven Thwaites",
+  "skills": [
+    "skills/scaffold-feature",
+    "skills/add-tests",
+    "skills/ship-it"
+  ],
+  "mcpConfig": ".mcp.json"
+}

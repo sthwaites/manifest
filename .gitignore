@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+sandbox/node_modules/
+.venv/
+
+# Next.js build output
+.next/
+sandbox/.next/
+out/
+sandbox/out/
+
+# Secrets — never commit these
+.env
+.env.local
+.env*.local
+
+# Database
+data/
+*.db
+*.db-journal
+
+# Generated product images — base images are committed, generated outputs are not
+sandbox/public/images/*.png
+!sandbox/public/images/*-base.png
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Fly.io — fly.toml is safe to commit (no secrets); .fly/ is local state
+.fly/
+
+# Prisma generated client (regenerated on npm ci)
+prisma/generated/
