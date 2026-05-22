@@ -1,0 +1,32 @@
+services:
+  app:
+    build: .
+    command: npm run dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - db_data:/app/data
+      - sandbox_src:/app/sandbox
+    environment:
+      DATABASE_URL: file:/app/data/dev.db
+      DEBUG_AUTH: "true"
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      NEXTAUTH_URL: http://localhost:3000
+    depends_on:
+      - sandbox
+
+  sandbox:
+    build: ./sandbox
+    command: npm run dev -- --port 3001
+    ports:
+      - "3001:3001"
+    volumes:
+      - sandbox_src:/sandbox
+      - /sandbox/node_modules
+
+volumes:
+  db_data:
+  sandbox_src:
