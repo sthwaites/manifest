@@ -1,17 +1,23 @@
 "use client"
 
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { AgentStream, type AgentEvent } from "./AgentStream"
 import { FeatureRequest } from "./FeatureRequest"
+import { ImageModal } from "./ImageModal"
 import { ThreadHistory } from "./ThreadHistory"
 
 type Tab = "app" | "agent" | "debug"
+type ImageProduct = {
+  id: string
+  name: string
+}
 
 export function CatalogueWorkspace() {
   const [tab, setTab] = useState<Tab>("app")
   const [events, setEvents] = useState<AgentEvent[]>([])
   const [connected, setConnected] = useState(false)
   const [flash, setFlash] = useState<"hot" | "rollback" | null>(null)
+  const [imageProduct, setImageProduct] = useState<ImageProduct | null>(null)
   const iframeRef = useRef<HTMLIFrameElement>(null)
 
   const appendEvent = useCallback((event: AgentEvent) => {
@@ -39,6 +45,16 @@ export function CatalogueWorkspace() {
       iframeRef.current.src = iframeRef.current.src
     }
     window.setTimeout(() => setFlash(null), 400)
+  }, [])
+
+  useEffect(() => {
+    function handleMessage(event: MessageEvent) {
+      if (!isGenerateImageMessage(event.data)) return
+      setImageProduct({ id: event.data.productId, name: event.data.productName })
+    }
+
+    window.addEventListener("message", handleMessage)
+    return () => window.removeEventListener("message", handleMessage)
   }, [])
 
   return (
@@ -101,6 +117,20 @@ export function CatalogueWorkspace() {
           </section>
         ) : null}
       </div>
+      {imageProduct ? (
+        <ImageModal
+          product={imageProduct}
+          open
+          onClose={() => setImageProduct(null)}
+          sandboxWindow={iframeRef.current?.contentWindow ?? null}
+        />
+      ) : null}
     </main>
   )
+}
+
+function isGenerateImageMessage(data: unknown): data is { type: "generateImage"; productId: string; productName: string } {
+  if (!data || typeof data !== "object") return false
+  const message = data as { type?: unknown; productId?: unknown; productName?: unknown }
+  return message.type === "generateImage" && typeof message.productId === "string" && typeof message.productName === "string"
 }

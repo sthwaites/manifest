@@ -39,4 +39,10 @@ describe("ProductCard", () => {
     const image = screen.getByRole("img", { name: "Test Product" })
     expect(image).toHaveAttribute("src", "/images/prod_test-base.png")
   })
+
+  it("renders a generate image button", () => {
+    render(<ProductCard product={product} onGenerateImage={() => undefined} />)
+
+    expect(screen.getByRole("button", { name: "Generate image for Test Product" })).toBeInTheDocument()
+  })
 })

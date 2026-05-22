@@ -25,6 +25,7 @@ Work through the build beats in order, keeping each step testable. Start with th
 6. Implement Beat 4 lib layer: event bus, Codex App Server process wrapper, moderation.
 7. Implement Beat 4 UI layer: WebSocket-backed feature request, AgentStream, and catalogue tabs.
 8. Implement Beat 5 persistence routes: threads, rollback, reset.
+9. Implement Beat 6 image generation route, before/after modal, and sandbox image update flow.
 
 ## Progress
 
@@ -38,3 +39,5 @@ Work through the build beats in order, keeping each step testable. Start with th
 - [x] Beat 4 UI tests and implementation passing.
 - [x] Beat 5 API route tests written and confirmed red.
 - [x] Beat 5 API routes passing.
+- [x] Beat 6 image generation tests written and confirmed red.
+- [x] Beat 6 image generation implementation passing.

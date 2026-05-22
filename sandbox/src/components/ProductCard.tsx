@@ -2,9 +2,10 @@ import type { Product } from "../data/products"
 
 type ProductCardProps = {
   product: Product
+  onGenerateImage?: (product: Product) => void
 }
 
-export function ProductCard({ product }: ProductCardProps) {
+export function ProductCard({ product, onGenerateImage }: ProductCardProps) {
   return (
     <article className="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
       <div className="aspect-square bg-zinc-100">
@@ -23,7 +24,19 @@ export function ProductCard({ product }: ProductCardProps) {
         </div>
         <p className="text-sm leading-6 text-zinc-600">{product.description}</p>
         <p className="text-xs text-zinc-500">{product.specs}</p>
-        <p className="text-base font-semibold text-zinc-950">{product.currency} {product.price}</p>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-base font-semibold text-zinc-950">{product.currency} {product.price}</p>
+          {onGenerateImage ? (
+            <button
+              type="button"
+              aria-label={`Generate image for ${product.name}`}
+              onClick={() => onGenerateImage(product)}
+              className="h-8 rounded-md border border-zinc-300 px-3 text-xs font-medium text-zinc-700 transition hover:border-indigo-500 hover:text-indigo-600"
+            >
+              Generate image
+            </button>
+          ) : null}
+        </div>
       </div>
     </article>
   )
