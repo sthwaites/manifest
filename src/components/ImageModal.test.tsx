@@ -42,6 +42,15 @@ describe("ImageModal", () => {
     )
   })
 
+  it("shows an animated skeleton while generating", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => undefined)))
+    render(<ImageModal product={product} open onClose={vi.fn()} sandboxWindow={null} />)
+
+    await userEvent.click(screen.getByRole("button", { name: "Generate" }))
+
+    expect(screen.getByTestId("image-generating-skeleton")).toBeInTheDocument()
+  })
+
   it("shows moderation errors and keeps inputs intact", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
       ok: false,

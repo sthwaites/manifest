@@ -84,7 +84,7 @@ export function CatalogueWorkspace() {
 
       <div className="min-h-0 flex-1">
         {tab === "app" ? (
-          <section className={`h-full min-h-[720px] bg-white transition ${flash === "hot" ? "ring-2 ring-amber-400" : ""} ${flash === "rollback" ? "ring-2 ring-orange-500" : ""}`}>
+          <section className={`h-full min-h-[720px] bg-white transition ${flash === "hot" ? "ring-2 ring-amber-400 ring-pulse-amber" : ""} ${flash === "rollback" ? "ring-2 ring-orange-500 ring-pulse-orange" : ""}`}>
             <iframe ref={iframeRef} title="Sandbox catalogue" src="/sandbox-preview/" className="h-full min-h-[720px] w-full bg-white" />
           </section>
         ) : null}

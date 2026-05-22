@@ -27,6 +27,7 @@ Work through the build beats in order, keeping each step testable. Start with th
 8. Implement Beat 5 persistence routes: threads, rollback, reset.
 9. Implement Beat 6 image generation route, before/after modal, and sandbox image update flow.
 10. Implement Beat 7 debug event log panel and standalone debug route.
+11. Implement Beat 8 polish and error states.
 
 ## Progress
 
@@ -44,3 +45,4 @@ Work through the build beats in order, keeping each step testable. Start with th
 - [x] Beat 6 image generation implementation passing.
 - [x] Beat 7 debug panel tests written and confirmed red.
 - [x] Beat 7 debug panel implementation passing.
+- [x] Beat 8 polish/error-state tests passing.

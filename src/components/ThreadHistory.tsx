@@ -71,7 +71,9 @@ export function ThreadHistory({ onRollbackComplete }: ThreadHistoryProps) {
 
       {loading ? <p className="text-sm text-zinc-400">Loading threads...</p> : null}
       {error ? <p className="text-sm text-rose-400">{error}</p> : null}
-      {!loading && threads.length === 0 ? <p className="text-sm text-zinc-400">No saved threads yet.</p> : null}
+      {!loading && threads.length === 0 ? (
+        <p className="text-sm text-zinc-400">No sessions yet. Describe a feature to get started.</p>
+      ) : null}
 
       <div className="space-y-2">
         {threads.map((thread) => {

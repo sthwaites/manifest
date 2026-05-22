@@ -7,3 +7,31 @@ html {
 body {
   margin: 0;
 }
+
+@keyframes ring-pulse-amber {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(251 191 36 / 0);
+  }
+  50% {
+    box-shadow: 0 0 0 3px rgb(251 191 36 / 0.6);
+  }
+}
+
+@keyframes ring-pulse-orange {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(249 115 22 / 0);
+  }
+  50% {
+    box-shadow: 0 0 0 3px rgb(249 115 22 / 0.6);
+  }
+}
+
+.ring-pulse-amber {
+  animation: ring-pulse-amber 600ms ease-out;
+}
+
+.ring-pulse-orange {
+  animation: ring-pulse-orange 400ms ease-out;
+}

@@ -30,6 +30,7 @@ describe("ProductCard", () => {
     render(<ProductCard product={{ ...product, image: null }} />)
 
     expect(screen.getByTestId("image-placeholder")).toBeInTheDocument()
+    expect(screen.getByTestId("image-placeholder")).toHaveTextContent("Test Product")
     expect(screen.queryByRole("img")).not.toBeInTheDocument()
   })
 

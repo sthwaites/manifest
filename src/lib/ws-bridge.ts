@@ -95,7 +95,7 @@ async function handleClientMessage(socket: WsSocket, data: string, sandboxDir: s
     await checkModeration(message.text)
   } catch (error) {
     if (error instanceof ModerationError) {
-      socket.send(JSON.stringify({ error: "That prompt can't be used - please try different wording.", flagged: true }))
+      socket.send(JSON.stringify({ error: "That prompt can't be used — please try different wording.", flagged: true }))
       return
     }
     throw error

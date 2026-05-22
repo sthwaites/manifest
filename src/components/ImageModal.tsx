@@ -81,7 +81,12 @@ export function ImageModal({ product, open, onClose, sandboxWindow }: ImageModal
           <div className="space-y-2">
             <p className="text-sm font-medium text-zinc-300">Generated image</p>
             <div className="grid aspect-square place-items-center overflow-hidden rounded-md border border-zinc-700 bg-zinc-950">
-              {generatedUrl ? (
+              {generating ? (
+                <div
+                  data-testid="image-generating-skeleton"
+                  className="h-full w-full animate-pulse bg-gradient-to-br from-zinc-800 via-zinc-700 to-zinc-900"
+                />
+              ) : generatedUrl ? (
                 <img
                   src={generatedUrl}
                   alt={`Generated ${product.name}`}

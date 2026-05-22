@@ -17,6 +17,14 @@ describe("ThreadHistory", () => {
     expect(screen.getByText("2 features")).toBeInTheDocument()
   })
 
+  it("renders the requested empty state", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ threads: [] })))
+
+    render(<ThreadHistory onRollbackComplete={vi.fn()} />)
+
+    expect(await screen.findByText("No sessions yet. Describe a feature to get started.")).toBeInTheDocument()
+  })
+
   it("calls rollback for a selected thread", async () => {
     const fetchMock = vi
       .fn()

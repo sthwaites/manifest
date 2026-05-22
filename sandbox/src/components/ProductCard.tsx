@@ -12,8 +12,11 @@ export function ProductCard({ product, onGenerateImage }: ProductCardProps) {
         {product.image ? (
           <img src={product.image} alt={product.name} className="h-full w-full object-cover" />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-sm text-zinc-500" data-testid="image-placeholder">
-            Image coming soon
+          <div
+            className="flex h-full w-full items-center justify-center bg-gradient-to-br from-zinc-100 via-zinc-200 to-zinc-300 px-4 text-center text-sm font-medium text-zinc-600"
+            data-testid="image-placeholder"
+          >
+            {product.name}
           </div>
         )}
       </div>

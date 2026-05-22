@@ -15,6 +15,9 @@ export function FeatureRequest({ onEvent, onConnectionChange }: FeatureRequestPr
   const [supportsRecording, setSupportsRecording] = useState(false)
   const [recording, setRecording] = useState(false)
   const [transcribing, setTranscribing] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [appServerUnavailable, setAppServerUnavailable] = useState(false)
+  const [connectionAttempt, setConnectionAttempt] = useState(0)
   const socketRef = useRef<WebSocket | null>(null)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
@@ -34,7 +37,10 @@ export function FeatureRequest({ onEvent, onConnectionChange }: FeatureRequestPr
     function connect(url: string) {
       const nextSocket = new WebSocket(url)
       socketRef.current = nextSocket
-      nextSocket.addEventListener("open", () => onConnectionChange?.(true))
+      nextSocket.addEventListener("open", () => {
+        setAppServerUnavailable(false)
+        onConnectionChange?.(true)
+      })
       nextSocket.addEventListener("close", () => {
         onConnectionChange?.(false)
         if (!fallbackStarted && fallbackUrl && url === primaryUrl) {
@@ -45,8 +51,12 @@ export function FeatureRequest({ onEvent, onConnectionChange }: FeatureRequestPr
       nextSocket.addEventListener("message", (message) => {
         const event = parseEvent(message.data)
         if (!event) return
+        setSubmitting(false)
+        if (event.type === "app-server-unavailable") {
+          setAppServerUnavailable(true)
+        }
         if (event.flagged || event.error) {
-          setError(event.error ?? "That prompt cannot be used. Try different wording.")
+          setError(event.flagged ? "That prompt can't be used — please try different wording." : event.error ?? "The request could not be completed.")
         }
         onEvent(event)
       })
@@ -57,7 +67,7 @@ export function FeatureRequest({ onEvent, onConnectionChange }: FeatureRequestPr
       socket.close()
       socketRef.current = null
     }
-  }, [onConnectionChange, onEvent])
+  }, [connectionAttempt, onConnectionChange, onEvent])
 
   function submitFeature() {
     const text = input.trim()
@@ -66,9 +76,11 @@ export function FeatureRequest({ onEvent, onConnectionChange }: FeatureRequestPr
 
     if (socketRef.current?.readyState !== WebSocket.OPEN) {
       setError("App Server not running. Check the local Codex process and try again.")
+      setAppServerUnavailable(true)
       return
     }
 
+    setSubmitting(true)
     socketRef.current.send(JSON.stringify({ type: "featureRequest", text }))
     onEvent({ type: "agentMessage", message: text })
     setInput("")
@@ -123,6 +135,14 @@ export function FeatureRequest({ onEvent, onConnectionChange }: FeatureRequestPr
 
   return (
     <div className="space-y-3">
+      {appServerUnavailable ? (
+        <div className="flex items-center justify-between gap-3 rounded-md border border-amber-400 bg-zinc-950 px-3 py-2 text-sm text-amber-400">
+          <span>App Server not running.</span>
+          <button type="button" onClick={() => setConnectionAttempt((value) => value + 1)} className="text-xs font-medium text-zinc-50 transition hover:text-amber-200">
+            Reconnect
+          </button>
+        </div>
+      ) : null}
       <div className="flex gap-2">
         <input
           value={input}
@@ -130,8 +150,9 @@ export function FeatureRequest({ onEvent, onConnectionChange }: FeatureRequestPr
           onKeyDown={(event) => {
             if (event.key === "Enter") submitFeature()
           }}
-          placeholder={recording ? "Listening..." : "Describe a feature - it ships."}
-          className="min-w-0 flex-1 rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-50 outline-none transition placeholder:text-zinc-500 focus:border-indigo-500"
+          disabled={submitting}
+          placeholder={recording ? "Listening..." : "Describe a feature — it ships."}
+          className="min-w-0 flex-1 rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-50 outline-none transition placeholder:text-zinc-500 focus:border-indigo-500 disabled:opacity-60"
         />
         {supportsRecording ? (
           <button
@@ -152,7 +173,8 @@ export function FeatureRequest({ onEvent, onConnectionChange }: FeatureRequestPr
           type="button"
           aria-label="Submit feature request"
           onClick={submitFeature}
-          className="grid size-10 place-items-center rounded-md bg-indigo-500 text-white transition hover:bg-indigo-400"
+          disabled={submitting}
+          className={`grid size-10 place-items-center rounded-md bg-indigo-500 text-white transition hover:bg-indigo-400 disabled:opacity-60 ${submitting ? "animate-pulse" : ""}`}
         >
           <Send className="size-4" />
         </button>
