@@ -9,6 +9,7 @@ import {
 } from "./codex-server"
 import { eventBus, type AppServerEvent } from "./event-bus"
 import { checkModeration, ModerationError } from "./moderation"
+import { createPersistenceState, persistAppServerEvent, persistFeatureRequest, type PersistenceState } from "./ws-persistence"
 
 process.env.WS_NO_BUFFER_UTIL = "1"
 const require = createRequire(import.meta.url)
@@ -24,6 +25,7 @@ type BridgeState = {
   started: boolean
   currentThreadId: string | null
   pendingInputs: string[]
+  persistence: PersistenceState
 }
 
 const globalForBridge = globalThis as unknown as {
@@ -38,6 +40,7 @@ export function ensureWebSocketBridge() {
     started: true,
     currentThreadId: null,
     pendingInputs: [],
+    persistence: createPersistenceState(),
   }
   globalForBridge.manifestWsBridge = state
 
@@ -69,7 +72,7 @@ export function ensureWebSocketBridge() {
   })
 
   eventBus.on("app-server-event", (event) => {
-    trackThread(event, state, sandboxDir)
+    void handleAppServerEvent(event, state, sandboxDir)
     const payload = JSON.stringify(event)
     for (const client of clients) {
       if (client.readyState === WebSocket.OPEN) {
@@ -108,6 +111,7 @@ async function handleClientMessage(socket: WsSocket, data: string, sandboxDir: s
     return
   }
 
+  await persistFeatureRequest(state.persistence, message.text)
   appServer.send(createTurnStartMessage(state.currentThreadId, message.text, sandboxDir))
 }
 
@@ -119,16 +123,20 @@ function startServerIfAvailable(sandboxDir: string) {
   }
 }
 
-function trackThread(event: AppServerEvent, state: BridgeState, sandboxDir: string) {
+async function handleAppServerEvent(event: AppServerEvent, state: BridgeState, sandboxDir: string) {
   const method = event.method ?? event.type
   const params = typeof event.params === "object" && event.params ? event.params : event
   const threadId = readString(params, "threadId") ?? readString(params, "id") ?? readNestedString(params, "thread", "id")
 
+  await persistAppServerEvent(event, state.persistence, sandboxDir)
+
   if (method === "thread/started" && threadId) {
     state.currentThreadId = threadId
+    state.persistence.currentThreadId = threadId
     const appServer = getAppServerClient()
     const nextInput = state.pendingInputs.shift()
     if (appServer && nextInput) {
+      await persistFeatureRequest(state.persistence, nextInput)
       appServer.send(createTurnStartMessage(threadId, nextInput, sandboxDir))
     }
   }

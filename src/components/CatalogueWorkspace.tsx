@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from "react"
 import { AgentStream, type AgentEvent } from "./AgentStream"
 import { FeatureRequest } from "./FeatureRequest"
+import { ThreadHistory } from "./ThreadHistory"
 
 type Tab = "app" | "agent" | "debug"
 
@@ -10,7 +11,7 @@ export function CatalogueWorkspace() {
   const [tab, setTab] = useState<Tab>("app")
   const [events, setEvents] = useState<AgentEvent[]>([])
   const [connected, setConnected] = useState(false)
-  const [flash, setFlash] = useState<"hot" | "reload" | null>(null)
+  const [flash, setFlash] = useState<"hot" | "rollback" | null>(null)
   const iframeRef = useRef<HTMLIFrameElement>(null)
 
   const appendEvent = useCallback((event: AgentEvent) => {
@@ -26,10 +27,18 @@ export function CatalogueWorkspace() {
         if (iframeRef.current) {
           iframeRef.current.src = iframeRef.current.src
         }
-        setFlash("reload")
+        setFlash("hot")
         window.setTimeout(() => setFlash(null), 400)
       }, 1500)
     }
+  }, [])
+
+  const handleRollbackComplete = useCallback(() => {
+    setFlash("rollback")
+    if (iframeRef.current) {
+      iframeRef.current.src = iframeRef.current.src
+    }
+    window.setTimeout(() => setFlash(null), 400)
   }, [])
 
   return (
@@ -57,23 +66,26 @@ export function CatalogueWorkspace() {
 
       <div className="min-h-0 flex-1">
         {tab === "app" ? (
-          <section className={`h-full min-h-[720px] bg-white transition ${flash === "hot" ? "ring-2 ring-amber-400" : ""} ${flash === "reload" ? "ring-2 ring-orange-500" : ""}`}>
+          <section className={`h-full min-h-[720px] bg-white transition ${flash === "hot" ? "ring-2 ring-amber-400" : ""} ${flash === "rollback" ? "ring-2 ring-orange-500" : ""}`}>
             <iframe ref={iframeRef} title="Sandbox catalogue" src="/sandbox-preview/" className="h-full min-h-[720px] w-full bg-white" />
           </section>
         ) : null}
 
         {tab === "agent" ? (
-          <section className="mx-auto flex max-w-4xl flex-col gap-4 px-6 py-6">
-            <div className="rounded-lg border border-zinc-700 bg-zinc-900 p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-sm font-semibold">Feature request</h2>
-                <span className={`text-xs ${connected ? "text-emerald-500" : "text-zinc-500"}`}>
-                  {connected ? "connected" : "disconnected"}
-                </span>
+          <section className="grid gap-4 px-6 py-6 lg:grid-cols-[280px_minmax(0,1fr)]">
+            <ThreadHistory onRollbackComplete={handleRollbackComplete} />
+            <div className="flex min-w-0 flex-col gap-4">
+              <div className="rounded-lg border border-zinc-700 bg-zinc-900 p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <h2 className="text-sm font-semibold">Feature request</h2>
+                  <span className={`text-xs ${connected ? "text-emerald-500" : "text-zinc-500"}`}>
+                    {connected ? "connected" : "disconnected"}
+                  </span>
+                </div>
+                <FeatureRequest onEvent={appendEvent} onConnectionChange={setConnected} />
               </div>
-              <FeatureRequest onEvent={appendEvent} onConnectionChange={setConnected} />
+              <AgentStream events={events} />
             </div>
-            <AgentStream events={events} />
           </section>
         ) : null}
 
