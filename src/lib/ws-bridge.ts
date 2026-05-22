@@ -10,6 +10,7 @@ import {
 import { eventBus, type AppServerEvent } from "./event-bus"
 import { checkModeration, ModerationError } from "./moderation"
 import { createPersistenceState, persistAppServerEvent, persistFeatureRequest, type PersistenceState } from "./ws-persistence"
+import { recordThreadEvent } from "./event-log"
 
 process.env.WS_NO_BUFFER_UTIL = "1"
 const require = createRequire(import.meta.url)
@@ -72,6 +73,7 @@ export function ensureWebSocketBridge() {
   })
 
   eventBus.on("app-server-event", (event) => {
+    recordThreadEvent(event)
     void handleAppServerEvent(event, state, sandboxDir)
     const payload = JSON.stringify(event)
     for (const client of clients) {

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { AgentStream, type AgentEvent } from "./AgentStream"
+import { DebugPanel } from "./DebugPanel"
 import { FeatureRequest } from "./FeatureRequest"
 import { ImageModal } from "./ImageModal"
 import { ThreadHistory } from "./ThreadHistory"
@@ -19,6 +20,7 @@ export function CatalogueWorkspace() {
   const [flash, setFlash] = useState<"hot" | "rollback" | null>(null)
   const [imageProduct, setImageProduct] = useState<ImageProduct | null>(null)
   const iframeRef = useRef<HTMLIFrameElement>(null)
+  const currentThreadId = findCurrentThreadId(events)
 
   const appendEvent = useCallback((event: AgentEvent) => {
     setEvents((current) => [...current, event])
@@ -107,13 +109,12 @@ export function CatalogueWorkspace() {
 
         {tab === "debug" ? (
           <section className="mx-auto max-w-4xl px-6 py-6">
-            <div className="rounded-lg border border-zinc-700 bg-zinc-900 p-4">
-              <h2 className="text-sm font-semibold">Debug</h2>
-              <p className="mt-2 text-sm text-zinc-400">Debug panel coming in Beat 7</p>
-              <pre className="mt-4 max-h-[560px] overflow-auto rounded bg-zinc-950 p-3 text-xs text-zinc-300">
-                {JSON.stringify(events, null, 2)}
-              </pre>
-            </div>
+            <DebugPanel
+              threadId={currentThreadId}
+              events={events}
+              onRollbackComplete={handleRollbackComplete}
+              onResetComplete={handleRollbackComplete}
+            />
           </section>
         ) : null}
       </div>
@@ -133,4 +134,34 @@ function isGenerateImageMessage(data: unknown): data is { type: "generateImage";
   if (!data || typeof data !== "object") return false
   const message = data as { type?: unknown; productId?: unknown; productName?: unknown }
   return message.type === "generateImage" && typeof message.productId === "string" && typeof message.productName === "string"
+}
+
+function findCurrentThreadId(events: AgentEvent[]) {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const id = readThreadId(events[index])
+    if (id) return id
+  }
+  return null
+}
+
+function readThreadId(event: AgentEvent) {
+  const params = readObject(event, "params") ?? event
+  return readString(params, "threadId") ?? readString(params, "id") ?? readNestedString(params, "thread", "id")
+}
+
+function readObject(source: object, key: string) {
+  if (!(key in source)) return null
+  const value = source[key as keyof typeof source]
+  return value && typeof value === "object" ? value : null
+}
+
+function readString(source: object, key: string) {
+  if (!(key in source)) return null
+  const value = source[key as keyof typeof source]
+  return typeof value === "string" ? value : null
+}
+
+function readNestedString(source: object, objectKey: string, valueKey: string) {
+  const nested = readObject(source, objectKey)
+  return nested ? readString(nested, valueKey) : null
 }
