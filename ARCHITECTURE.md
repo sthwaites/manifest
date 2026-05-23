@@ -1,52 +1,55 @@
-# Architecture
+# Manifest Architecture
 
-## CI / CD Pipeline
-
-This diagram shows how a Jira ticket flows through to a deployed change — the canonical Codex + Jira integration pattern described in Part 1 of the assignment, made concrete in this repo.
-
-```mermaid
-graph TD
-  A["Jira ticket\nlabel: codex-ready"] -->|Jira Automation webhook| B[GitHub Action]
-  B -->|codex exec --non-interactive| C[Codex]
-  C -->|commits fix to feature branch| D[Feature branch]
-  D -->|PR opened| E[Pull Request]
-  E -->|auto-fills pull_request_template.md| F[PR review]
-  F -->|approved and merged| G[main branch]
-  G -->|fly deploy| H[Fly.io]
-  E -->|transitions ticket to In Review| A
-```
-
-The shared configuration lives entirely in the repo — the GitHub Action YAML, `AGENTS.md`, and the Skills under `.agents/skills/` — so every engineer on the team gets the same Codex behaviour without any per-machine setup.
-
-The PR template (`.github/pull_request_template.md`) captures the Codex thread ID and original feature prompt so every machine-written PR is auditable: reviewers can trace exactly what was asked and replay the session in the Debug tab.
-
-## App Architecture
+Manifest is a two-process local application for iterating on a product catalogue with an agent-driven editing loop. The main app owns authentication, persistence, the agent event stream, rollback/reset controls, and image generation. The sandbox app is the catalogue that Codex edits.
 
 ```mermaid
 graph LR
   subgraph Browser
-    A[Catalogue iframe]
-    B[Agent stream panel]
+    A[Manifest workspace]
+    B[Sandbox catalogue iframe]
   end
-  subgraph MainApp[Main App :3000]
-    C[WebSocket bridge /api/ws]
-    D[Auth / sessions]
-    E[Image generation /api/images]
+  subgraph MainApp[Next.js main app :3000]
+    C[Catalogue workspace]
+    D[WebSocket bridge /api/ws]
+    E[Thread and event APIs]
+    F[Image generation API]
+    G[(Prisma / SQLite)]
   end
-  subgraph CodexAS[Codex App Server]
-    F[codex app-server]
+  subgraph AppServer[Codex App Server]
+    H[codex app-server]
   end
-  subgraph Sandbox[Sandbox :3001]
-    G[Next.js dev server]
-    H[Source files — sandbox git repo]
+  subgraph Sandbox[Next.js sandbox :3001]
+    I[Catalogue UI]
+    J[Sandbox git repository]
   end
-  B -- WebSocket --> C
-  C -- stdio JSON-RPC --> F
-  F -- writes files --> H
-  H -- hot-reload --> G
-  G -- iframe --> A
-  E --> I[OpenAI gpt-image-2]
-  D --> J[(Prisma / SQLite)]
+
+  A --> C
+  C --> B
+  C -- WebSocket --> D
+  D -- JSON-RPC over stdio --> H
+  H -- workspaceWrite --> J
+  J -- hot reload --> I
+  I --> B
+  E --> G
+  F --> K[OpenAI Images API]
 ```
 
-The App Server's `workspaceWrite` sandbox is scoped to `./sandbox/` only — it cannot write outside that directory. The sandbox is its own git repository: every completed Codex turn produces one commit, giving a full rollback history. The `baseline` tag marks the initial state; "Reset to baseline" (`POST /api/reset`) resets to that tag regardless of how many commits have accumulated.
+## Main App
+
+The main app runs on port `3000`. It uses Next.js App Router, NextAuth, Prisma, and SQLite. Authenticated users open `/catalogue`, which starts the WebSocket bridge and renders the sandbox in an iframe.
+
+Agent events flow through `src/lib/event-bus.ts` and `/api/ws`. Unknown App Server events are forwarded to the debug stream instead of failing the UI, so new event types remain inspectable while the app keeps running.
+
+## Sandbox App
+
+The sandbox runs as a separate Next.js app on port `3001`. Its source lives under `sandbox/`, and the Codex App Server is only granted `workspaceWrite` access to that directory. The iframe always points at the sandbox dev server, so file changes hot-reload independently from the main app.
+
+The sandbox directory is also a git repository at runtime. The `baseline` tag marks the original catalogue state. Rollback uses the current sandbox git state to decide whether to discard uncommitted edits or move back one committed feature. Reset hard-resets to `baseline`, removes untracked files, and restarts the App Server.
+
+## Image Generation
+
+Generated product imagery starts from committed base images in `sandbox/public/images/*-base.png`. `/api/images/generate` checks moderation, edits the selected base image with OpenAI image generation, writes the generated file beside the base image, and returns a URL that the sandbox can apply immediately. Generated image files are ignored by git.
+
+## Persistence
+
+Prisma stores users, sessions, threads, feature requests, and captured App Server events in SQLite. The default local database path is `data/dev.db`, which is ignored so local runs do not leak state into commits.
