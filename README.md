@@ -29,6 +29,7 @@ cd sandbox && npm ci
 cd ..
 npx prisma generate
 npx prisma migrate dev
+npm run sandbox:init
 ```
 
 Create `.env.local` from `.env.example` and fill in the values that match your environment.
@@ -91,7 +92,7 @@ Pass `OPENAI_API_KEY` and `NEXTAUTH_SECRET` from your shell or an uncommitted `.
 
 - If `/catalogue` redirects to login during local development, set `DEBUG_AUTH=true`.
 - If feature requests show "App Server not running", confirm the `codex` CLI is installed and `CODEX_API_KEY` is set.
-- If reset fails, verify `sandbox/` has a git repository and a `baseline` tag.
+- If reset fails, run `npm run sandbox:init` to recreate the sandbox git repository and `baseline` tag.
 - If generated images do not appear, check `OPENAI_API_KEY`, moderation errors, and write access to `sandbox/public/images/`.
 
 ## License

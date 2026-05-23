@@ -44,7 +44,7 @@ Agent events flow through `src/lib/event-bus.ts` and `/api/ws`. Unknown App Serv
 
 The sandbox runs as a separate Next.js app on port `3001`. Its source lives under `sandbox/`, and the Codex App Server is only granted `workspaceWrite` access to that directory. The iframe always points at the sandbox dev server, so file changes hot-reload independently from the main app.
 
-The sandbox directory is also a git repository at runtime. The `baseline` tag marks the original catalogue state. Rollback uses the current sandbox git state to decide whether to discard uncommitted edits or move back one committed feature. Reset hard-resets to `baseline`, removes untracked files, and restarts the App Server.
+The sandbox directory is also a git repository at runtime. `npm run sandbox:init` creates that repository for fresh clones and tags the original catalogue state as `baseline`. Rollback uses the current sandbox git state to decide whether to discard uncommitted edits or move back one committed feature. Reset hard-resets to `baseline`, removes untracked files, and restarts the App Server.
 
 ## Image Generation
 

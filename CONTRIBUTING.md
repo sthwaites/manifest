@@ -10,6 +10,7 @@ cd sandbox && npm ci
 cd ..
 npx prisma generate
 npx prisma migrate dev
+npm run sandbox:init
 ```
 
 Copy `.env.example` to `.env.local`. Keep secrets out of git.
