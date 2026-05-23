@@ -1,0 +1,80 @@
+export type Product = {
+  id: string
+  name: string
+  category: string
+  description: string
+  specs: string
+  price: number
+  currency: "GBP"
+  image: string | null
+  imagePromptHint: string
+}
+
+export const products: Product[] = [
+  {
+    id: "prod_001",
+    name: "Ceramic Pour-Over Coffee Set",
+    category: "Kitchen",
+    description: "Handthrown stoneware dripper and server. Porous matt glaze finish absorbs oils for a cleaner cup. Fits standard 02 filters.",
+    specs: "450ml capacity · 18cm height · 320g · dishwasher safe",
+    price: 42,
+    currency: "GBP",
+    image: "/images/prod_001-base.png",
+    imagePromptHint: "Pour-over coffee set on a wooden breakfast bar, morning light, steam rising",
+  },
+  {
+    id: "prod_002",
+    name: "Merino Wool Throw Blanket",
+    category: "Home",
+    description: "Extra-fine 17.5 micron merino. Temperature-regulating, non-itchy. Woven in Portugal from certified mulesing-free wool.",
+    specs: "130×170cm · 400g/m² · hand wash cold · air dry flat",
+    price: 89,
+    currency: "GBP",
+    image: "/images/prod_002-base.png",
+    imagePromptHint: "Merino throw draped over a linen reading chair beside a window, golden afternoon light",
+  },
+  {
+    id: "prod_003",
+    name: "Bamboo Desk Organiser",
+    category: "Office",
+    description: "Three-tier tray system with removable dividers. FSC-certified bamboo with natural beeswax finish. Fits A4 and US Letter.",
+    specs: "24×18×10cm · 380g · assembly required (no tools)",
+    price: 28,
+    currency: "GBP",
+    image: "/images/prod_003-base.png",
+    imagePromptHint: "Bamboo desk organiser on a clean minimal desk with a laptop and plant, soft office light",
+  },
+  {
+    id: "prod_004",
+    name: "Copper Cocktail Shaker",
+    category: "Bar",
+    description: "Seamless spun copper with tin lining. Weighted base prevents tipping. Leak-proof bayonet seal. Includes built-in strainer.",
+    specs: "750ml · 28cm · solid copper exterior · tin interior · hand wash only",
+    price: 35,
+    currency: "GBP",
+    image: "/images/prod_004-base.png",
+    imagePromptHint: "Copper cocktail shaker on a marble bar top with a lemon twist and ice, moody evening bar lighting",
+  },
+  {
+    id: "prod_005",
+    name: "Linen Tote Bag",
+    category: "Accessories",
+    description: "Undyed Belgian linen. Reinforced cotton handles with leather rivets. Interior slip pocket. Gets better with washing.",
+    specs: "40×38cm · 5cm gusset · natural undyed · 180g",
+    price: 22,
+    currency: "GBP",
+    image: "/images/prod_005-base.png",
+    imagePromptHint: "Linen tote bag carried at a weekend farmers market, natural outdoor light, styled casually",
+  },
+  {
+    id: "prod_006",
+    name: "Brass Candlestick Trio",
+    category: "Home",
+    description: "Hand-turned solid brass on a lathe. Three graduated heights sold as a set. Develops patina over time - polish or let it age.",
+    specs: "8 / 12 / 16cm height · 1.2kg combined · fits standard 22mm taper candles",
+    price: 54,
+    currency: "GBP",
+    image: "/images/prod_006-base.png",
+    imagePromptHint: "Brass candlestick trio on a linen tablecloth with lit taper candles, warm evening dinner setting",
+  },
+]

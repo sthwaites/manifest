@@ -15,7 +15,8 @@ sandbox/out/
 .env*.local
 
 # Database
-data/
+/data/
+/prisma/data/
 *.db
 *.db-journal
 
@@ -41,3 +42,10 @@ Thumbs.db
 
 # Prisma generated client (regenerated on npm ci)
 prisma/generated/
+
+# Coverage and build caches
+coverage/
+dist/
+sandbox/coverage/
+sandbox/dist/
+tsconfig.tsbuildinfo

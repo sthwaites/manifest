@@ -12,6 +12,7 @@ sandbox/node_modules
 .env
 .env.local
 .env*.local
+tsconfig.tsbuildinfo
 
 *.log
 npm-debug.log*
