@@ -39,13 +39,31 @@ describe("/api/threads", () => {
 
   it("returns threads for authenticated GET", async () => {
     authMock.mockResolvedValue({ user: { id: "user_1", email: "dev@localhost" } })
-    prismaMock.thread.findMany.mockResolvedValue([{ id: "thread_1", _count: { features: 2 } }])
+    prismaMock.thread.findMany.mockResolvedValue([
+      { id: "thread_1", features: [{ id: "feature_1" }, { id: "feature_2" }] },
+      { id: "thread_2", features: [] },
+    ])
     const { GET } = await import("./route")
 
     const response = await GET()
 
     expect(response.status).toBe(200)
-    await expect(response.json()).resolves.toEqual({ threads: [{ id: "thread_1", _count: { features: 2 } }] })
+    expect(prismaMock.thread.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        include: {
+          features: {
+            where: { status: { in: ["pending", "applied"] } },
+            select: { id: true },
+          },
+        },
+      }),
+    )
+    await expect(response.json()).resolves.toEqual({
+      threads: [
+        { id: "thread_1", _count: { features: 2 } },
+        { id: "thread_2", _count: { features: 0 } },
+      ],
+    })
   })
 
   it("returns 401 for unauthenticated POST", async () => {

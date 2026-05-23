@@ -16,13 +16,19 @@ export async function GET() {
     where: { userId: session.user.id },
     orderBy: { updatedAt: "desc" },
     include: {
-      _count: {
-        select: { features: true },
+      features: {
+        where: { status: { in: ["pending", "applied"] } },
+        select: { id: true },
       },
     },
   })
 
-  return Response.json({ threads })
+  return Response.json({
+    threads: threads.map(({ features, ...thread }) => ({
+      ...thread,
+      _count: { features: features.length },
+    })),
+  })
 }
 
 export async function POST(req: Request) {

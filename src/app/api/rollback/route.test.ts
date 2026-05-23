@@ -1,42 +1,44 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-const authMock = vi.fn()
-const sendMock = vi.fn()
-const execSyncMock = vi.fn()
-const prismaMock = vi.hoisted(() => ({
-  feature: {
-    updateMany: vi.fn(),
+const mocks = vi.hoisted(() => ({
+  auth: vi.fn(),
+  execSync: vi.fn(),
+  prisma: {
+    feature: {
+      updateMany: vi.fn(),
+    },
   },
+  send: vi.fn(),
 }))
 
 vi.mock("@/lib/auth", () => ({
-  auth: authMock,
+  auth: mocks.auth,
 }))
 
 vi.mock("@/lib/codex-server", () => ({
-  getAppServerClient: vi.fn(() => ({ send: sendMock })),
+  getAppServerClient: vi.fn(() => ({ send: mocks.send })),
 }))
 
 vi.mock("@/lib/prisma", () => ({
-  prisma: prismaMock,
+  prisma: mocks.prisma,
 }))
 
 vi.mock("child_process", () => ({
-  default: { execSync: execSyncMock },
-  execSync: execSyncMock,
+  default: { execSync: mocks.execSync },
+  execSync: mocks.execSync,
 }))
 
 describe("/api/rollback", () => {
   beforeEach(() => {
     vi.resetModules()
-    authMock.mockReset()
-    sendMock.mockReset()
-    execSyncMock.mockReset()
-    prismaMock.feature.updateMany.mockReset()
+    mocks.auth.mockReset()
+    mocks.send.mockReset()
+    mocks.execSync.mockReset()
+    mocks.prisma.feature.updateMany.mockReset()
   })
 
   it("returns 401 without a session", async () => {
-    authMock.mockResolvedValue(null)
+    mocks.auth.mockResolvedValue(null)
     const { POST } = await import("./route")
 
     const response = await POST(new Request("http://localhost/api/rollback", { method: "POST", body: "{}" }))
@@ -44,9 +46,13 @@ describe("/api/rollback", () => {
     expect(response.status).toBe(401)
   })
 
-  it("rolls back app server and sandbox git state with a session", async () => {
-    authMock.mockResolvedValue({ user: { id: "user_1" } })
-    prismaMock.feature.updateMany.mockResolvedValue({ count: 1 })
+  it("uses HEAD when the sandbox working tree is dirty", async () => {
+    mocks.auth.mockResolvedValue({ user: { id: "user_1" } })
+    mocks.prisma.feature.updateMany.mockResolvedValue({ count: 1 })
+    mocks.execSync.mockImplementation((command: string) => {
+      if (command === "git status --porcelain") return " M src/app/globals.css\n"
+      return ""
+    })
     const { POST } = await import("./route")
 
     const response = await POST(
@@ -57,8 +63,118 @@ describe("/api/rollback", () => {
     )
 
     expect(response.status).toBe(200)
-    expect(sendMock).toHaveBeenCalledWith(expect.objectContaining({ method: "thread/rollback" }))
-    expect(execSyncMock).toHaveBeenCalledWith("git reset --hard HEAD~1", expect.objectContaining({ cwd: expect.stringContaining("sandbox") }))
+    expect(mocks.send).toHaveBeenCalledWith(expect.objectContaining({ method: "thread/rollback" }))
+    expect(mocks.execSync).toHaveBeenCalledWith("git reset --hard HEAD", expect.objectContaining({ cwd: expect.stringContaining("sandbox") }))
+    expect(mocks.prisma.feature.updateMany).toHaveBeenCalledWith({
+      where: { threadId: "thread_1", status: { in: ["pending", "applied"] } },
+      data: { status: "rolled_back" },
+    })
     await expect(response.json()).resolves.toEqual({ message: "Rolled back to previous state" })
+  })
+
+  it("uses HEAD~1 when the sandbox is clean and ahead of baseline", async () => {
+    mocks.auth.mockResolvedValue({ user: { id: "user_1" } })
+    mocks.prisma.feature.updateMany.mockResolvedValue({ count: 1 })
+    mocks.execSync.mockImplementation((command: string) => {
+      if (command === "git status --porcelain") return ""
+      if (command === "git rev-parse HEAD") return "commit_2\n"
+      if (command === "git rev-parse baseline") return "commit_1\n"
+      return ""
+    })
+    const { POST } = await import("./route")
+
+    const response = await POST(
+      new Request("http://localhost/api/rollback", {
+        method: "POST",
+        body: JSON.stringify({ threadId: "thread_1" }),
+      }),
+    )
+
+    expect(response.status).toBe(200)
+    expect(mocks.execSync).toHaveBeenCalledWith("git reset --hard HEAD~1", expect.objectContaining({ cwd: expect.stringContaining("sandbox") }))
+    expect(mocks.prisma.feature.updateMany).toHaveBeenCalledWith({
+      where: { threadId: "thread_1", status: { in: ["pending", "applied"] } },
+      data: { status: "rolled_back" },
+    })
+    await expect(response.json()).resolves.toEqual({ message: "Rolled back to previous state" })
+  })
+
+  it("returns a no-op response when the sandbox is clean at baseline", async () => {
+    mocks.auth.mockResolvedValue({ user: { id: "user_1" } })
+    mocks.prisma.feature.updateMany.mockResolvedValue({ count: 1 })
+    mocks.execSync.mockImplementation((command: string) => {
+      if (command === "git status --porcelain") return ""
+      if (command === "git rev-parse HEAD") return "commit_1\n"
+      if (command === "git rev-parse baseline") return "commit_1\n"
+      return ""
+    })
+    const { POST } = await import("./route")
+
+    const response = await POST(
+      new Request("http://localhost/api/rollback", {
+        method: "POST",
+        body: JSON.stringify({ threadId: "thread_1" }),
+      }),
+    )
+
+    expect(response.status).toBe(200)
+    expect(mocks.execSync).not.toHaveBeenCalledWith("git reset --hard HEAD", expect.anything())
+    expect(mocks.execSync).not.toHaveBeenCalledWith("git reset --hard HEAD~1", expect.anything())
+    expect(mocks.send).not.toHaveBeenCalled()
+    expect(mocks.prisma.feature.updateMany).toHaveBeenCalledWith({
+      where: { threadId: "thread_1", status: { in: ["pending", "applied"] } },
+      data: { status: "rolled_back" },
+    })
+    await expect(response.json()).resolves.toEqual({ message: "No sandbox changes to roll back" })
+  })
+
+  it("marks thread features rolled back when the sandbox is clean but not ahead of baseline", async () => {
+    mocks.auth.mockResolvedValue({ user: { id: "user_1" } })
+    mocks.prisma.feature.updateMany.mockResolvedValue({ count: 1 })
+    mocks.execSync.mockImplementation((command: string) => {
+      if (command === "git status --porcelain") return ""
+      if (command === "git rev-parse HEAD") return "commit_1\n"
+      if (command === "git rev-parse baseline") return "commit_2\n"
+      if (command === "git merge-base --is-ancestor baseline HEAD") throw new Error("not ahead")
+      return ""
+    })
+    const { POST } = await import("./route")
+
+    const response = await POST(
+      new Request("http://localhost/api/rollback", {
+        method: "POST",
+        body: JSON.stringify({ threadId: "thread_1" }),
+      }),
+    )
+
+    expect(response.status).toBe(200)
+    expect(mocks.execSync).not.toHaveBeenCalledWith("git reset --hard HEAD~1", expect.anything())
+    expect(mocks.prisma.feature.updateMany).toHaveBeenCalledWith({
+      where: { threadId: "thread_1", status: { in: ["pending", "applied"] } },
+      data: { status: "rolled_back" },
+    })
+    await expect(response.json()).resolves.toEqual({ message: "No sandbox changes to roll back" })
+  })
+
+  it("returns a JSON error when a git command fails", async () => {
+    mocks.auth.mockResolvedValue({ user: { id: "user_1" } })
+    mocks.execSync.mockImplementation((command: string) => {
+      if (command === "git status --porcelain") return " M src/app/globals.css\n"
+      if (command === "git reset --hard HEAD") throw new Error("reset failed")
+      return ""
+    })
+    const { POST } = await import("./route")
+
+    const response = await POST(
+      new Request("http://localhost/api/rollback", {
+        method: "POST",
+        body: JSON.stringify({ threadId: "thread_1" }),
+      }),
+    )
+
+    expect(response.status).toBe(500)
+    expect(mocks.send).not.toHaveBeenCalled()
+    expect(mocks.prisma.feature.updateMany).not.toHaveBeenCalled()
+    await expect(response.json()).resolves.toEqual({ error: "Rollback failed", detail: "reset failed" })
   })
 })
