@@ -29,6 +29,7 @@ Work through the build beats in order, keeping each step testable. Start with th
 10. Implement Beat 7 debug event log panel and standalone debug route.
 11. Implement Beat 8 polish and error states.
 12. Initialise sandbox Git baseline and keep SQLite data under root `data/`.
+13. Verify local browser flow and remove noisy localhost WebSocket fallback.
 
 ## Progress
 
@@ -48,3 +49,4 @@ Work through the build beats in order, keeping each step testable. Start with th
 - [x] Beat 7 debug panel implementation passing.
 - [x] Beat 8 polish/error-state tests passing.
 - [x] Sandbox Git baseline initialised and tagged.
+- [x] Browser smoke verified baseline, sandbox, catalogue iframe, and clean console diagnostics.

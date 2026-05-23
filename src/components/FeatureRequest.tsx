@@ -26,12 +26,8 @@ export function FeatureRequest({ onEvent, onConnectionChange }: FeatureRequestPr
     setSupportsRecording(typeof window !== "undefined" && "MediaRecorder" in window && Boolean(navigator.mediaDevices))
 
     const protocol = window.location.protocol === "https:" ? "wss" : "ws"
-    const primaryUrl = `${protocol}://${window.location.host}/api/ws`
-    const fallbackUrl =
-      window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
-        ? `${protocol}://${window.location.hostname}:3002/api/ws`
-        : null
-    let fallbackStarted = false
+    const localHost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+    const primaryUrl = localHost ? `${protocol}://${window.location.hostname}:3002/api/ws` : `${protocol}://${window.location.host}/api/ws`
     let socket = connect(primaryUrl)
 
     function connect(url: string) {
@@ -43,10 +39,6 @@ export function FeatureRequest({ onEvent, onConnectionChange }: FeatureRequestPr
       })
       nextSocket.addEventListener("close", () => {
         onConnectionChange?.(false)
-        if (!fallbackStarted && fallbackUrl && url === primaryUrl) {
-          fallbackStarted = true
-          socket = connect(fallbackUrl)
-        }
       })
       nextSocket.addEventListener("message", (message) => {
         const event = parseEvent(message.data)
