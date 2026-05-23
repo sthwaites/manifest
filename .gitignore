@@ -37,6 +37,10 @@ Thumbs.db
 .idea/
 *.swp
 
+# Local agent/MCP tooling
+.codex/
+.mcp.json
+
 # Fly.io — fly.toml is safe to commit (no secrets); .fly/ is local state
 .fly/
 
