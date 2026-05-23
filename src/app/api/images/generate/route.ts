@@ -58,6 +58,7 @@ export async function POST(req: Request) {
     return Response.json({ error: "Image generation failed" }, { status: 502 })
   }
 
+  // Generated files sit beside committed base images so the sandbox can swap URLs without moving assets.
   const filename = `${body.productId}-${Date.now()}.png`
   const destination = path.join(process.cwd(), "sandbox", "public", "images", filename)
   await writeFile(destination, Buffer.from(b64, "base64"))

@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { products } from "../../../sandbox/src/data/products"
+import { baselineProducts } from "@/lib/baseline-products"
 
 export default function BaselinePage() {
   return (
@@ -21,7 +21,7 @@ export default function BaselinePage() {
         </header>
 
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {products.map((product) => (
+          {baselineProducts.map((product) => (
             <article key={product.id} className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
               <div className="aspect-square bg-zinc-100">
                 <img
@@ -43,9 +43,7 @@ export default function BaselinePage() {
           ))}
         </div>
 
-        <footer className="border-t border-zinc-200 pt-6 text-sm text-zinc-500">
-          Built with Codex in a 4-hour window.
-        </footer>
+        <footer className="border-t border-zinc-200 pt-6 text-sm text-zinc-500">Manifest baseline catalogue.</footer>
       </section>
     </main>
   )

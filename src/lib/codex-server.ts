@@ -35,6 +35,7 @@ export function startAppServer(sandboxDir: string): AppServerClient {
   rl.on("line", (line) => {
     try {
       const message = JSON.parse(line) as AppServerEvent
+      // Bridge raw App Server events to WebSocket subscribers without coupling UI code to stdio.
       eventBus.emit("app-server-event", message)
     } catch {
       eventBus.emit("debug-event", { type: "malformed-app-server-event", line })

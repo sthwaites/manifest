@@ -33,6 +33,7 @@ export function CatalogueWorkspace() {
     if (event.type === "turn/completed") {
       window.setTimeout(() => {
         if (iframeRef.current) {
+          // Next dev HMR can miss file changes from the agent process; reload the iframe after a completed turn.
           iframeRef.current.src = iframeRef.current.src
         }
         setFlash("hot")

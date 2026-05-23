@@ -38,6 +38,7 @@ export async function POST(req: Request) {
   try {
     const status = gitOutput("git status --porcelain", sandboxDir)
 
+    // Codex can leave uncommitted file edits before a turn is committed; discard those before moving history.
     if (status.length > 0) {
       execSync("git reset --hard HEAD", { cwd: sandboxDir })
       rolledBack = true
