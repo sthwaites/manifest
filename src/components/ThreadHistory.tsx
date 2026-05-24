@@ -1,6 +1,6 @@
 "use client"
 
-import { RotateCcw } from "lucide-react"
+import { RefreshCw, RotateCcw } from "lucide-react"
 import { useEffect, useState } from "react"
 
 type Thread = {
@@ -61,11 +61,16 @@ export function ThreadHistory({ onRollbackComplete }: ThreadHistoryProps) {
   }, [])
 
   return (
-    <aside className="rounded-lg border border-zinc-700 bg-zinc-900 p-4">
+    <aside className="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-sm font-semibold">Threads</h2>
-        <button type="button" onClick={() => void loadThreads()} className="text-xs text-zinc-400 transition hover:text-zinc-100">
-          Refresh
+        <button
+          type="button"
+          aria-label="Refresh threads"
+          onClick={() => void loadThreads()}
+          className="grid size-8 place-items-center rounded-md border border-zinc-800 text-zinc-400 transition hover:text-zinc-100"
+        >
+          <RefreshCw className="size-3.5" />
         </button>
       </div>
 
@@ -80,7 +85,7 @@ export function ThreadHistory({ onRollbackComplete }: ThreadHistoryProps) {
           const title = thread.summary ?? thread.id
           const featureLabel = `${thread._count.features} ${thread._count.features === 1 ? "feature" : "features"}`
           return (
-            <article key={thread.id} className="rounded-md border border-zinc-700 bg-zinc-950 p-3">
+            <article key={thread.id} className="rounded-md border border-zinc-800 bg-zinc-950 p-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h3 className="truncate text-sm font-medium text-zinc-100">{title}</h3>

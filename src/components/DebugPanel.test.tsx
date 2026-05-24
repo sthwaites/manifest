@@ -18,33 +18,47 @@ describe("DebugPanel", () => {
     })
   })
 
-  it("renders collapsed event rows with timestamp, type, and preview", () => {
+  it("renders known events as readable table rows", () => {
     render(<DebugPanel threadId="thread_1" events={events} onRollbackComplete={vi.fn()} onResetComplete={vi.fn()} />)
 
     expect(screen.getByText("thread_1")).toBeInTheDocument()
     expect(screen.getByText("42 tokens")).toBeInTheDocument()
-    expect(screen.getByText("thread/started")).toBeInTheDocument()
-    expect(screen.getByText("fileChange")).toBeInTheDocument()
-    expect(screen.getAllByText(/2026-05-23/)[0]).toBeInTheDocument()
+    expect(screen.getByRole("columnheader", { name: "Time" })).toBeInTheDocument()
+    expect(screen.getByRole("columnheader", { name: "Event" })).toBeInTheDocument()
+    expect(screen.getByText("Thread started")).toBeInTheDocument()
+    expect(screen.getByText("File changed")).toBeInTheDocument()
+    expect(screen.getByText("Turn completed")).toBeInTheDocument()
+    expect(screen.getByText("Updated src/app/page.tsx")).toBeInTheDocument()
+    expect(screen.queryByText(/"path": "src\/app\/page.tsx"/)).not.toBeInTheDocument()
   })
 
-  it("expands and collapses a row with full JSON and diff rendering", async () => {
+  it("keeps raw JSON hidden by default and visible when expanded", async () => {
     render(<DebugPanel threadId="thread_1" events={events} onRollbackComplete={vi.fn()} onResetComplete={vi.fn()} />)
 
-    await userEvent.click(screen.getByRole("button", { name: /fileChange/ }))
+    expect(screen.queryByText(/"path": "src\/app\/page.tsx"/)).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getAllByRole("button", { name: "View raw JSON" })[1])
+
+    expect(screen.getByText(/"path": "src\/app\/page.tsx"/)).toBeInTheDocument()
+  })
+
+  it("keeps file diffs available and color-coded when expanded", async () => {
+    render(<DebugPanel threadId="thread_1" events={events} onRollbackComplete={vi.fn()} onResetComplete={vi.fn()} />)
+
+    await userEvent.click(screen.getByRole("button", { name: "View diff" }))
 
     expect(screen.getByText("+ added")).toHaveClass("text-emerald-400")
     expect(screen.getByText("- removed")).toHaveClass("text-rose-400")
     expect(screen.getByText(/"path": "src\/app\/page.tsx"/)).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole("button", { name: /fileChange/ }))
+    await userEvent.click(screen.getByRole("button", { name: "View diff" }))
     expect(screen.queryByText("+ added")).not.toBeInTheDocument()
   })
 
   it("copies the full session log", async () => {
     render(<DebugPanel threadId="thread_1" events={events} onRollbackComplete={vi.fn()} onResetComplete={vi.fn()} />)
 
-    await userEvent.click(screen.getByRole("button", { name: "Copy session log" }))
+    await userEvent.click(screen.getByRole("button", { name: /Copy session log/ }))
 
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(JSON.stringify(events, null, 2))
   })
@@ -72,13 +86,13 @@ describe("DebugPanel", () => {
     vi.stubGlobal("fetch", fetchMock)
     render(<DebugPanel threadId="thread_1" events={events} onRollbackComplete={vi.fn()} onResetComplete={vi.fn()} />)
 
-    await userEvent.click(screen.getByRole("button", { name: "Reset to baseline" }))
+    await userEvent.click(screen.getByRole("button", { name: "Reset baseline" }))
     expect(screen.getByText("This will discard all Codex changes and return the catalogue to its original state.")).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }))
     expect(fetchMock).not.toHaveBeenCalled()
 
-    await userEvent.click(screen.getByRole("button", { name: "Reset to baseline" }))
+    await userEvent.click(screen.getByRole("button", { name: "Reset baseline" }))
     await userEvent.click(screen.getByRole("button", { name: "Confirm reset" }))
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/reset", expect.objectContaining({ method: "POST" })))
