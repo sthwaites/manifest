@@ -40,7 +40,7 @@ jobs:
           echo "base_ref=$base_ref" >> "$GITHUB_OUTPUT"
 
       - name: Check out pull request
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: refs/pull/${{ steps.pr.outputs.number }}/head
           fetch-depth: 0
