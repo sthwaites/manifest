@@ -1,7 +1,7 @@
 "use client"
 
-import { useCallback, useRef, useState } from "react"
-import { Activity, CheckCircle2, ChevronDown, CircleOff, RefreshCw } from "lucide-react"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { Activity, AlertTriangle, CheckCircle2, ChevronDown, CircleOff, LogOut, RefreshCw, ShieldCheck, UserRound } from "lucide-react"
 import { AgentStream, type AgentEvent } from "./AgentStream"
 import { DebugPanel } from "./DebugPanel"
 import { FeatureRequest } from "./FeatureRequest"
@@ -9,13 +9,63 @@ import { ImageStudio } from "./ImageStudio"
 import { ThreadHistory } from "./ThreadHistory"
 import seedProducts from "../../seed/products.json"
 
-export function CatalogueWorkspace() {
+type CatalogueWorkspaceProps = {
+  userName?: string | null
+  userEmail?: string | null
+  debugAuthEnabled?: boolean
+  sandboxUrl?: string
+  logoutAction?: (formData: FormData) => void | Promise<void>
+}
+
+type SandboxHealth = {
+  status: "checking" | "online" | "unavailable"
+  message: string
+}
+
+export function CatalogueWorkspace({ userName = null, userEmail = null, debugAuthEnabled = false, sandboxUrl = "http://localhost:3001/", logoutAction }: CatalogueWorkspaceProps) {
   const [events, setEvents] = useState<AgentEvent[]>([])
   const [connected, setConnected] = useState(false)
   const [flash, setFlash] = useState<"hot" | "rollback" | null>(null)
+  const [sandboxHealth, setSandboxHealth] = useState<SandboxHealth>({
+    status: "checking",
+    message: "Checking sandbox.",
+  })
   const [agentProgressOpen, setAgentProgressOpen] = useState(false)
+  const [identityOpen, setIdentityOpen] = useState(false)
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const currentThreadId = findCurrentThreadId(events)
+  const displayName = userName || userEmail || "Signed in"
+  const displayEmail = userEmail && userEmail !== displayName ? userEmail : null
+
+  const checkSandboxHealth = useCallback(async () => {
+    setSandboxHealth({ status: "checking", message: "Checking sandbox." })
+    try {
+      const response = await fetch("/api/health", { cache: "no-store" })
+      const payload = (await response.json()) as {
+        services?: {
+          sandbox?: {
+            status?: string
+            message?: string
+          }
+        }
+      }
+      const sandbox = payload.services?.sandbox
+      if (response.ok && sandbox?.status === "ok") {
+        setSandboxHealth({ status: "online", message: sandbox.message ?? "Sandbox is reachable." })
+        return
+      }
+      setSandboxHealth({
+        status: "unavailable",
+        message: sandbox?.message ?? "Sandbox is not reachable.",
+      })
+    } catch {
+      setSandboxHealth({ status: "unavailable", message: "Sandbox health check failed." })
+    }
+  }, [])
+
+  useEffect(() => {
+    void checkSandboxHealth()
+  }, [checkSandboxHealth])
 
   const appendEvent = useCallback((event: AgentEvent) => {
     setEvents((current) => [...current, event])
@@ -49,20 +99,82 @@ export function CatalogueWorkspace() {
     if (iframeRef.current) {
       iframeRef.current.src = iframeRef.current.src
     }
+    void checkSandboxHealth()
     setFlash("hot")
     window.setTimeout(() => setFlash(null), 400)
-  }, [])
+  }, [checkSandboxHealth])
 
   return (
     <main className="flex min-h-screen flex-col bg-zinc-950 text-zinc-50">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 bg-zinc-950 px-5 py-4 lg:px-6">
-        <div>
-          <h1 className="text-xl font-semibold">Manifest</h1>
-          <p className="text-sm text-zinc-400">Internal catalogue build cockpit</p>
+        <div className="flex items-center gap-3">
+          <div className="grid size-10 place-items-center rounded-md border border-indigo-400/30 bg-indigo-400/10 text-sm font-semibold text-indigo-200 shadow-inner shadow-indigo-500/10">
+            M
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-semibold tracking-normal">Manifest</h1>
+              <span className="rounded border border-zinc-700 px-1.5 py-0.5 text-[10px] font-medium uppercase text-zinc-400">cockpit</span>
+            </div>
+            <p className="text-sm text-zinc-400">Internal catalogue build cockpit</p>
+          </div>
         </div>
-        <div className="flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm">
-          {connected ? <CheckCircle2 className="size-4 text-emerald-400" /> : <CircleOff className="size-4 text-zinc-500" />}
-          <span className={connected ? "text-emerald-300" : "text-zinc-400"}>{connected ? "App Server connected" : "App Server disconnected"}</span>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm">
+            {connected ? <CheckCircle2 className="size-4 text-emerald-400" /> : <CircleOff className="size-4 text-zinc-500" />}
+            <span className={connected ? "text-emerald-300" : "text-zinc-400"}>{connected ? "App Server connected" : "App Server disconnected"}</span>
+          </div>
+          {debugAuthEnabled ? (
+            <div className="inline-flex h-10 items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 text-sm font-medium text-amber-200">
+              <ShieldCheck className="size-4" />
+              Debug mode
+            </div>
+          ) : (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIdentityOpen((open) => !open)}
+                aria-expanded={identityOpen}
+                aria-label="Open user menu"
+                className="inline-flex h-10 items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900 px-2.5 text-sm text-zinc-200 transition hover:border-indigo-500 hover:text-zinc-50"
+              >
+                <span className="grid size-6 place-items-center rounded bg-zinc-800 text-xs font-semibold text-indigo-200">
+                  {initialFor(displayName)}
+                </span>
+                <span className="max-w-36 truncate">{displayName}</span>
+                <ChevronDown className={`size-4 text-zinc-500 transition ${identityOpen ? "rotate-180" : ""}`} />
+              </button>
+              {identityOpen ? (
+                <div className="absolute right-0 z-40 mt-2 w-64 rounded-lg border border-zinc-700 bg-zinc-900 p-2 shadow-2xl shadow-black/40">
+                  <div className="flex items-start gap-3 border-b border-zinc-800 px-2 py-2">
+                    <div className="grid size-8 shrink-0 place-items-center rounded bg-zinc-800 text-xs font-semibold text-indigo-200">
+                      {initialFor(displayName)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-zinc-100">{displayName}</p>
+                      {displayEmail ? <p className="truncate text-xs text-zinc-500">{displayEmail}</p> : null}
+                    </div>
+                  </div>
+                  {logoutAction ? (
+                    <form action={logoutAction} className="pt-2">
+                      <button
+                        type="submit"
+                        className="inline-flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-zinc-300 transition hover:bg-zinc-800 hover:text-zinc-50"
+                      >
+                        <LogOut className="size-4 text-zinc-500" />
+                        Log out
+                      </button>
+                    </form>
+                  ) : (
+                    <div className="inline-flex h-9 w-full items-center gap-2 px-2 text-sm text-zinc-500">
+                      <UserRound className="size-4" />
+                      Session active
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          )}
         </div>
       </header>
 
@@ -71,7 +183,7 @@ export function CatalogueWorkspace() {
           <div className="flex items-center justify-between gap-3 border-b border-zinc-800 px-4 py-3">
             <div>
               <h2 className="text-sm font-semibold text-zinc-100">Live sandbox</h2>
-              <p className="text-xs text-zinc-500">http://localhost:3001</p>
+              <p className="text-xs text-zinc-500">{sandboxUrl}</p>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2 text-xs">
               <button
@@ -94,15 +206,36 @@ export function CatalogueWorkspace() {
                   Restored
                 </span>
               ) : null}
-              <span className="rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-emerald-300">Catalogue visible</span>
+              <SandboxHealthBadge health={sandboxHealth} />
             </div>
           </div>
           <div
-            className={`min-h-0 flex-1 bg-white transition ${
+            className={`relative min-h-0 flex-1 bg-white transition ${
               flash === "hot" ? "ring-2 ring-inset ring-amber-400 ring-pulse-amber" : ""
             } ${flash === "rollback" ? "ring-2 ring-inset ring-orange-500 ring-pulse-orange" : ""}`}
           >
-            <iframe ref={iframeRef} title="Sandbox catalogue" src="http://localhost:3001/" className="h-full min-h-[560px] w-full bg-white lg:min-h-0" />
+            <iframe ref={iframeRef} title="Sandbox catalogue" src={sandboxUrl} className="h-full min-h-[560px] w-full bg-white lg:min-h-0" />
+            {sandboxHealth.status === "unavailable" ? (
+              <div className="absolute inset-0 grid place-items-center bg-zinc-950/85 px-6 text-center text-zinc-100">
+                <div className="max-w-md space-y-3">
+                  <div className="mx-auto grid size-10 place-items-center rounded-md border border-amber-400/50 bg-amber-400/10 text-amber-300">
+                    <AlertTriangle className="size-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold">Sandbox unavailable</h3>
+                    <p className="mt-1 text-sm leading-6 text-zinc-300">{sandboxHealth.message}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={refreshSandbox}
+                    className="inline-flex h-9 items-center gap-2 rounded-md border border-zinc-600 px-3 text-sm font-medium text-zinc-100 transition hover:border-indigo-400 hover:text-indigo-200"
+                  >
+                    <RefreshCw className="size-4" />
+                    Check again
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </div>
         </section>
 
@@ -115,19 +248,21 @@ export function CatalogueWorkspace() {
                 {connected ? "connected" : "disconnected"}
               </span>
             </div>
-            <FeatureRequest onEvent={appendEvent} onConnectionChange={setConnected} />
+            <FeatureRequest
+              onEvent={appendEvent}
+              onConnectionChange={setConnected}
+              threadId={currentThreadId}
+              events={events}
+              onRollbackComplete={handleRollbackComplete}
+              onResetComplete={handleRollbackComplete}
+            />
           </section>
 
           <ImageStudio products={seedProducts} sandboxWindow={iframeRef.current?.contentWindow ?? null} />
 
           <ThreadHistory onRollbackComplete={handleRollbackComplete} />
 
-          <DebugPanel
-            threadId={currentThreadId}
-            events={events}
-            onRollbackComplete={handleRollbackComplete}
-            onResetComplete={handleRollbackComplete}
-          />
+          <DebugPanel threadId={currentThreadId} events={events} />
 
           <section className="rounded-lg border border-zinc-800 bg-zinc-900">
             <button
@@ -154,6 +289,16 @@ export function CatalogueWorkspace() {
       </div>
     </main>
   )
+}
+
+function SandboxHealthBadge({ health }: { health: SandboxHealth }) {
+  if (health.status === "online") {
+    return <span className="rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-emerald-300">Catalogue online</span>
+  }
+  if (health.status === "unavailable") {
+    return <span className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-amber-300">Sandbox unavailable</span>
+  }
+  return <span className="rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-zinc-300">Checking sandbox</span>
 }
 
 function findCurrentThreadId(events: AgentEvent[]) {
@@ -184,4 +329,8 @@ function readString(source: object, key: string) {
 function readNestedString(source: object, objectKey: string, valueKey: string) {
   const nested = readObject(source, objectKey)
   return nested ? readString(nested, valueKey) : null
+}
+
+function initialFor(value: string) {
+  return value.trim().charAt(0).toUpperCase() || "U"
 }

@@ -2,6 +2,7 @@ import { execSync } from "child_process"
 import path from "node:path"
 import { auth } from "@/lib/auth"
 import { restartAppServer } from "@/lib/codex-server"
+import { resetWebSocketBridgeState } from "@/lib/ws-bridge"
 
 function errorDetail(error: unknown) {
   return error instanceof Error ? error.message : "Unknown git error"
@@ -18,6 +19,7 @@ export async function POST() {
     // Reset restores the catalogue source and removes untracked files created during agent runs.
     execSync("git reset --hard baseline", { cwd: sandboxDir })
     execSync("git clean -fd", { cwd: sandboxDir })
+    resetWebSocketBridgeState()
     restartAppServer(sandboxDir)
   } catch (error) {
     return Response.json({ error: "Reset failed", detail: errorDetail(error) }, { status: 500 })

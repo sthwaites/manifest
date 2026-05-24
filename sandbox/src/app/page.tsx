@@ -19,17 +19,6 @@ export default function SandboxHomePage() {
     return () => window.removeEventListener("message", handleMessage)
   }, [])
 
-  function requestImage(product: Product) {
-    window.parent.postMessage(
-      {
-        type: "generateImage",
-        productId: product.id,
-        productName: product.name,
-      },
-      "*",
-    )
-  }
-
   return (
     <main className="min-h-screen bg-zinc-50 text-zinc-950">
       <section className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-10">
@@ -39,7 +28,7 @@ export default function SandboxHomePage() {
         </header>
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {products.map((product) => (
-            <ProductCard key={product.id} product={product} onGenerateImage={requestImage} />
+            <ProductCard key={product.id} product={product} />
           ))}
         </div>
       </section>

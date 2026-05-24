@@ -1,6 +1,6 @@
 import OpenAI from "openai"
 
-const openai = new OpenAI()
+let openai: OpenAI | null = null
 
 export class ModerationError extends Error {
   constructor(message: string) {
@@ -10,7 +10,7 @@ export class ModerationError extends Error {
 }
 
 export async function checkModeration(input: string): Promise<void> {
-  const result = await openai.moderations.create({ input })
+  const result = await getOpenAI().moderations.create({ input })
   const moderation = result.results[0]
 
   if (!moderation?.flagged) {
@@ -22,4 +22,9 @@ export async function checkModeration(input: string): Promise<void> {
     .map(([category]) => category)
 
   throw new ModerationError(`Content flagged: ${categories.join(", ")}`)
+}
+
+function getOpenAI() {
+  openai ??= new OpenAI()
+  return openai
 }

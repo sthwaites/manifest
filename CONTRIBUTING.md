@@ -29,13 +29,20 @@ Copy `.env.example` to `.env.local`. Keep secrets out of git.
 Before opening a pull request, run:
 
 ```bash
-npm run test -- --run
-npm run build
-cd sandbox && npm run test -- --run
-cd sandbox && npm run build
+npm run verify
 ```
 
 Add focused tests for new API routes, stateful components, and shared utilities.
+
+## Codex Review
+
+Pull requests can request an automated Codex review by commenting:
+
+```text
+/codex-review
+```
+
+The review workflow is intentionally read-only. It comments with findings and does not push code changes.
 
 ## Commit Style
 

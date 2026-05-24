@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react"
+import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { DebugPanel } from "./DebugPanel"
@@ -19,7 +19,7 @@ describe("DebugPanel", () => {
   })
 
   it("renders known events as readable table rows", () => {
-    render(<DebugPanel threadId="thread_1" events={events} onRollbackComplete={vi.fn()} onResetComplete={vi.fn()} />)
+    render(<DebugPanel threadId="thread_1" events={events} />)
 
     expect(screen.getByText("thread_1")).toBeInTheDocument()
     expect(screen.getByText("42 tokens")).toBeInTheDocument()
@@ -33,7 +33,7 @@ describe("DebugPanel", () => {
   })
 
   it("keeps raw JSON hidden by default and visible when expanded", async () => {
-    render(<DebugPanel threadId="thread_1" events={events} onRollbackComplete={vi.fn()} onResetComplete={vi.fn()} />)
+    render(<DebugPanel threadId="thread_1" events={events} />)
 
     expect(screen.queryByText(/"path": "src\/app\/page.tsx"/)).not.toBeInTheDocument()
 
@@ -43,7 +43,7 @@ describe("DebugPanel", () => {
   })
 
   it("keeps file diffs available and color-coded when expanded", async () => {
-    render(<DebugPanel threadId="thread_1" events={events} onRollbackComplete={vi.fn()} onResetComplete={vi.fn()} />)
+    render(<DebugPanel threadId="thread_1" events={events} />)
 
     await userEvent.click(screen.getByRole("button", { name: "View diff" }))
 
@@ -56,53 +56,18 @@ describe("DebugPanel", () => {
   })
 
   it("copies the full session log", async () => {
-    render(<DebugPanel threadId="thread_1" events={events} onRollbackComplete={vi.fn()} onResetComplete={vi.fn()} />)
+    render(<DebugPanel threadId="thread_1" events={events} />)
 
     await userEvent.click(screen.getByRole("button", { name: /Copy session log/ }))
 
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(JSON.stringify(events, null, 2))
   })
 
-  it("disables undo when there are no completed turns", () => {
-    render(<DebugPanel threadId="thread_1" events={[]} onRollbackComplete={vi.fn()} onResetComplete={vi.fn()} />)
+  it("does not render recovery controls in debug inspection", () => {
+    render(<DebugPanel threadId="thread_1" events={[]} />)
 
-    expect(screen.getByRole("button", { name: "Undo last change" })).toBeDisabled()
-  })
-
-  it("calls rollback and shows a success message", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ message: "Rolled back to previous state" })))
-    const onRollbackComplete = vi.fn()
-    render(<DebugPanel threadId="thread_1" events={events} onRollbackComplete={onRollbackComplete} onResetComplete={vi.fn()} />)
-
-    await userEvent.click(screen.getByRole("button", { name: "Undo last change" }))
-
-    expect(fetch).toHaveBeenCalledWith("/api/rollback", expect.objectContaining({ method: "POST" }))
-    expect(await screen.findByText("Rolled back to previous state")).toBeInTheDocument()
-    expect(onRollbackComplete).toHaveBeenCalled()
-  })
-
-  it("confirms reset and does not call the route when cancelled", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ message: "Sandbox reset to baseline" }))
-    vi.stubGlobal("fetch", fetchMock)
-    render(<DebugPanel threadId="thread_1" events={events} onRollbackComplete={vi.fn()} onResetComplete={vi.fn()} />)
-
-    await userEvent.click(screen.getByRole("button", { name: "Reset baseline" }))
-    expect(screen.getByText("This will discard all Codex changes and return the catalogue to its original state.")).toBeInTheDocument()
-
-    await userEvent.click(screen.getByRole("button", { name: "Cancel" }))
-    expect(fetchMock).not.toHaveBeenCalled()
-
-    await userEvent.click(screen.getByRole("button", { name: "Reset baseline" }))
-    await userEvent.click(screen.getByRole("button", { name: "Confirm reset" }))
-
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/reset", expect.objectContaining({ method: "POST" })))
-    expect(await screen.findByText("Sandbox reset to baseline")).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Undo last change" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Reset baseline" })).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /Copy session log/ })).toBeInTheDocument()
   })
 })
-
-function jsonResponse(body: unknown) {
-  return {
-    ok: true,
-    json: async () => body,
-  }
-}

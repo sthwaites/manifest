@@ -27,6 +27,27 @@ describe("codex-server", () => {
     expect(child.stdinText()).toContain('"method":"initialized"')
   })
 
+  it("starts app-server with a git commit identity", async () => {
+    const child = createChildProcess()
+    spawnMock.mockReturnValue(child)
+    const { startAppServer } = await import("./codex-server")
+
+    startAppServer("/tmp/sandbox")
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      "codex",
+      ["app-server"],
+      expect.objectContaining({
+        env: expect.objectContaining({
+          GIT_AUTHOR_NAME: "Manifest Agent",
+          GIT_AUTHOR_EMAIL: "manifest-agent@example.invalid",
+          GIT_COMMITTER_NAME: "Manifest Agent",
+          GIT_COMMITTER_EMAIL: "manifest-agent@example.invalid",
+        }),
+      }),
+    )
+  })
+
   it("parses JSONL stdout and emits events", async () => {
     const child = createChildProcess()
     spawnMock.mockReturnValue(child)
@@ -48,6 +69,41 @@ describe("codex-server", () => {
     startAppServer("/tmp/sandbox")
 
     expect(() => child.stdout.write("not json\n")).not.toThrow()
+  })
+
+  it("emits unavailable when the app-server exits", async () => {
+    const child = createChildProcess()
+    spawnMock.mockReturnValue(child)
+    const { eventBus } = await import("./event-bus")
+    const { startAppServer } = await import("./codex-server")
+    const received = new Promise((resolve) => eventBus.once("app-server-event", resolve))
+
+    startAppServer("/tmp/sandbox")
+    child.emit("exit", 1, null)
+
+    await expect(received).resolves.toMatchObject({
+      type: "app-server-unavailable",
+      error: "App-server exited before the request finished.",
+      code: 1,
+    })
+  })
+
+  it("emits unavailable when stdin writes fail", async () => {
+    const child = createChildProcess()
+    child.stdin.write = vi.fn(() => {
+      throw new Error("stdin closed")
+    }) as unknown as WritableBuffer["write"]
+    spawnMock.mockReturnValue(child)
+    const { eventBus } = await import("./event-bus")
+    const { startAppServer } = await import("./codex-server")
+    const received = new Promise((resolve) => eventBus.once("app-server-event", resolve))
+
+    startAppServer("/tmp/sandbox")
+
+    await expect(received).resolves.toMatchObject({
+      type: "app-server-unavailable",
+      error: "stdin closed",
+    })
   })
 })
 

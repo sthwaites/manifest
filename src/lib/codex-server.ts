@@ -10,6 +10,7 @@ export type AppServerClient = {
 let proc: ChildProcessWithoutNullStreams | null = null
 let client: AppServerClient | null = null
 let nextMessageId = 1
+let lastUnavailableMessage: string | null = null
 
 export function startAppServer(sandboxDir: string): AppServerClient {
   if (client && proc && !proc.killed) {
@@ -17,13 +18,18 @@ export function startAppServer(sandboxDir: string): AppServerClient {
   }
 
   try {
+    lastUnavailableMessage = null
     proc = spawn("codex", ["app-server"], {
       cwd: sandboxDir,
       stdio: ["pipe", "pipe", "pipe"],
       env: {
         ...process.env,
         OPENAI_API_KEY: process.env.OPENAI_API_KEY,
-        CODEX_API_KEY: process.env.CODEX_API_KEY,
+        CODEX_API_KEY: process.env.CODEX_API_KEY || process.env.OPENAI_API_KEY,
+        GIT_AUTHOR_NAME: process.env.GIT_AUTHOR_NAME || "Manifest Agent",
+        GIT_AUTHOR_EMAIL: process.env.GIT_AUTHOR_EMAIL || "manifest-agent@example.invalid",
+        GIT_COMMITTER_NAME: process.env.GIT_COMMITTER_NAME || "Manifest Agent",
+        GIT_COMMITTER_EMAIL: process.env.GIT_COMMITTER_EMAIL || "manifest-agent@example.invalid",
       },
     })
   } catch (error) {
@@ -44,7 +50,14 @@ export function startAppServer(sandboxDir: string): AppServerClient {
 
   proc.on("error", emitUnavailable)
   proc.on("exit", (code, signal) => {
+    lastUnavailableMessage = "App-server exited before the request finished."
     eventBus.emit("debug-event", { type: "app-server-exit", code, signal })
+    eventBus.emit("app-server-event", {
+      type: "app-server-unavailable",
+      error: lastUnavailableMessage,
+      code,
+      signal,
+    })
     proc = null
     client = null
   })
@@ -53,10 +66,19 @@ export function startAppServer(sandboxDir: string): AppServerClient {
     process: proc,
     send(message: unknown) {
       if (!proc || proc.killed) {
-        eventBus.emit("app-server-event", { type: "app-server-unavailable" })
+        emitUnavailable()
         return
       }
-      proc.stdin.write(`${JSON.stringify(message)}\n`)
+      try {
+        const writable = proc.stdin.write(`${JSON.stringify(message)}\n`, (error?: Error | null) => {
+          if (error) emitUnavailable(error)
+        })
+        if (!writable && proc.stdin.destroyed) {
+          emitUnavailable(new Error("App-server stdin closed"))
+        }
+      } catch (error) {
+        emitUnavailable(error)
+      }
     },
   }
 
@@ -75,6 +97,17 @@ export function restartAppServer(sandboxDir: string): AppServerClient {
 
 export function getAppServerClient() {
   return client
+}
+
+export function getAppServerStatus() {
+  if (client && proc && !proc.killed) {
+    return { status: "ok" as const, message: "App-server process is running." }
+  }
+
+  return {
+    status: lastUnavailableMessage ? ("down" as const) : ("unknown" as const),
+    message: lastUnavailableMessage ?? "App-server has not started yet.",
+  }
 }
 
 export function createThreadStartMessage() {
@@ -124,8 +157,9 @@ function initializeAppServer(appServerClient: AppServerClient) {
 }
 
 function emitUnavailable(error?: unknown) {
+  lastUnavailableMessage = error instanceof Error ? error.message : "App-server unavailable."
   eventBus.emit("app-server-event", {
     type: "app-server-unavailable",
-    message: error instanceof Error ? error.message : "App Server not running",
+    error: lastUnavailableMessage,
   })
 }

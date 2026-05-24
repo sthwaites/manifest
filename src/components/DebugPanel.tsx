@@ -1,14 +1,12 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { ChevronDown, ClipboardCopy, RotateCcw, RotateCw, TerminalSquare, Undo2 } from "lucide-react"
+import { ChevronDown, ClipboardCopy, TerminalSquare } from "lucide-react"
 import type { AgentEvent } from "./AgentStream"
 
 type DebugPanelProps = {
   threadId: string | null
   events: AgentEvent[]
-  onRollbackComplete?: () => void
-  onResetComplete?: () => void
 }
 
 type EventSummary = {
@@ -21,44 +19,14 @@ type EventSummary = {
   tone: "default" | "success" | "warning" | "danger" | "primary"
 }
 
-export function DebugPanel({ threadId, events, onRollbackComplete, onResetComplete }: DebugPanelProps) {
+export function DebugPanel({ threadId, events }: DebugPanelProps) {
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null)
-  const [confirmingReset, setConfirmingReset] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
-  const hasCompletedTurn = events.some((event) => (event.method ?? event.type) === "turn/completed")
   const tokenCount = useMemo(() => events.reduce((total, event) => total + readTokenUsage(event), 0), [events])
 
   async function copyLog() {
     await navigator.clipboard.writeText(JSON.stringify(events, null, 2))
     setToast("Session log copied")
-  }
-
-  async function rollback() {
-    if (!threadId) return
-    const response = await fetch("/api/rollback", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ threadId }),
-    })
-    const payload = (await response.json()) as { message?: string; error?: string }
-    if (!response.ok) {
-      setToast(payload.error ?? "Rollback failed")
-      return
-    }
-    setToast(payload.message ?? "Rolled back to previous state")
-    onRollbackComplete?.()
-  }
-
-  async function reset() {
-    const response = await fetch("/api/reset", { method: "POST" })
-    const payload = (await response.json()) as { message?: string; error?: string }
-    if (!response.ok) {
-      setToast(payload.error ?? "Reset failed")
-      return
-    }
-    setToast(payload.message ?? "Sandbox reset to baseline")
-    setConfirmingReset(false)
-    onResetComplete?.()
   }
 
   return (
@@ -74,28 +42,11 @@ export function DebugPanel({ threadId, events, onRollbackComplete, onResetComple
           </div>
           <TerminalSquare className="size-4 text-zinc-500" />
         </div>
-        <div className="mt-4 grid gap-2 sm:grid-cols-2">
-          <button
-            type="button"
-            onClick={rollback}
-            disabled={!hasCompletedTurn || !threadId}
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-orange-500/40 px-3 text-xs font-medium text-orange-300 transition hover:border-orange-400 hover:text-orange-200 disabled:border-zinc-800 disabled:text-zinc-600 disabled:opacity-70"
-          >
-            <Undo2 className="size-3.5" />
-            Undo last change
-          </button>
-          <button
-            type="button"
-            onClick={() => setConfirmingReset(true)}
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-orange-500 px-3 text-xs font-medium text-white transition hover:bg-orange-400"
-          >
-            <RotateCcw className="size-3.5" />
-            Reset baseline
-          </button>
+        <div className="mt-4 grid gap-2">
           <button
             type="button"
             onClick={copyLog}
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-zinc-700 px-3 text-xs font-medium text-zinc-300 transition hover:text-zinc-50 sm:col-span-2"
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-zinc-700 px-3 text-xs font-medium text-zinc-300 transition hover:text-zinc-50"
           >
             <ClipboardCopy className="size-3.5" />
             Copy session log
@@ -176,25 +127,6 @@ export function DebugPanel({ threadId, events, onRollbackComplete, onResetComple
         ) : null}
       </div>
 
-      {confirmingReset ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-zinc-950/80 px-4">
-          <section className="w-full max-w-md rounded-lg border border-zinc-700 bg-zinc-900 p-5">
-            <h3 className="text-base font-semibold">Reset to baseline</h3>
-            <p className="mt-2 text-sm text-zinc-300">
-              This will discard all Codex changes and return the catalogue to its original state.
-            </p>
-            <div className="mt-5 flex justify-end gap-2">
-              <button type="button" onClick={() => setConfirmingReset(false)} className="h-9 rounded-md border border-zinc-700 px-3 text-sm text-zinc-300">
-                Cancel
-              </button>
-              <button type="button" onClick={() => void reset()} className="inline-flex h-9 items-center gap-2 rounded-md bg-orange-500 px-3 text-sm font-medium text-white">
-                <RotateCw className="size-4" />
-                Confirm reset
-              </button>
-            </div>
-          </section>
-        </div>
-      ) : null}
     </section>
   )
 }

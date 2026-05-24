@@ -41,9 +41,9 @@ describe("ProductCard", () => {
     expect(image).toHaveAttribute("src", "/images/prod_test-base.png")
   })
 
-  it("renders a generate image button", () => {
-    render(<ProductCard product={product} onGenerateImage={() => undefined} />)
+  it("does not render customer-facing image generation controls", () => {
+    render(<ProductCard product={product} />)
 
-    expect(screen.getByRole("button", { name: "Generate image for Test Product" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /Generate image/ })).not.toBeInTheDocument()
   })
 })

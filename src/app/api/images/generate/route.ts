@@ -4,7 +4,7 @@ import OpenAI, { toFile } from "openai"
 import { auth } from "@/lib/auth"
 import { checkModeration, ModerationError } from "@/lib/moderation"
 
-const openai = new OpenAI()
+let openai: OpenAI | null = null
 
 type GenerateImageRequest = {
   productId?: string
@@ -52,9 +52,9 @@ export async function POST(req: Request) {
       ? `Place this ${body.productName} in ${context}. Lifestyle photography, natural light, aspirational but authentic. Keep the product faithful to the original image.`
       : `Show this ${body.productName} being used in ${context}. Natural context, candid feel. Keep the product faithful to the original image.`
 
-  let response: Awaited<ReturnType<typeof openai.images.edit>>
+  let response: Awaited<ReturnType<OpenAI["images"]["edit"]>>
   try {
-    response = await openai.images.edit({
+    response = await getOpenAI().images.edit({
       model: "gpt-image-2",
       image: baseImageFile,
       prompt,
@@ -80,6 +80,11 @@ export async function POST(req: Request) {
   }
 
   return Response.json({ url: `/images/${filename}`, filename })
+}
+
+function getOpenAI() {
+  openai ??= new OpenAI()
+  return openai
 }
 
 function formatOpenAIError(error: unknown) {

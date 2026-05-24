@@ -22,10 +22,13 @@ type ClientMessage = {
   text?: string
 }
 
-type BridgeState = {
+export type BridgeState = {
   started: boolean
+  listenStatus: "starting" | "listening" | "down"
+  listenError: string | null
   currentThreadId: string | null
   pendingInputs: string[]
+  pendingThreadTimer: ReturnType<typeof setTimeout> | null
   persistence: PersistenceState
 }
 
@@ -39,8 +42,11 @@ export function ensureWebSocketBridge() {
 
   const state: BridgeState = {
     started: true,
+    listenStatus: "starting",
+    listenError: null,
     currentThreadId: null,
     pendingInputs: [],
+    pendingThreadTimer: null,
     persistence: createPersistenceState(),
   }
   globalForBridge.manifestWsBridge = state
@@ -67,7 +73,12 @@ export function ensureWebSocketBridge() {
     clients.add(socket)
     startServerIfAvailable(sandboxDir)
     socket.on("message", (data) => {
-      void handleClientMessage(socket, data.toString(), sandboxDir, state)
+      void handleClientMessage(socket, data.toString(), sandboxDir, state).catch((error) => {
+        sendToClient(socket, {
+          type: "bridge-error",
+          error: error instanceof Error ? error.message : "Bridge failed while handling the request.",
+        })
+      })
     })
     socket.on("close", () => clients.delete(socket))
   })
@@ -83,11 +94,47 @@ export function ensureWebSocketBridge() {
     }
   })
 
-  server.listen(3002, "127.0.0.1")
+  server.on("error", (error) => {
+    state.listenStatus = "down"
+    state.listenError = error instanceof Error ? error.message : "WebSocket bridge failed to listen."
+    eventBus.emit("app-server-event", {
+      type: "bridge-unavailable",
+      error: state.listenError,
+    })
+  })
+  server.listen(3002, "0.0.0.0", () => {
+    state.listenStatus = "listening"
+    state.listenError = null
+  })
   return state
 }
 
-async function handleClientMessage(socket: WsSocket, data: string, sandboxDir: string, state: BridgeState) {
+export function getWebSocketBridgeStatus() {
+  const state = globalForBridge.manifestWsBridge
+  if (!state) {
+    return { status: "unknown" as const, message: "WebSocket bridge has not started yet." }
+  }
+  if (state.listenStatus === "listening") {
+    return { status: "ok" as const, message: "WebSocket bridge is listening." }
+  }
+  if (state.listenStatus === "down") {
+    return { status: "down" as const, message: state.listenError ?? "WebSocket bridge is unavailable." }
+  }
+  return { status: "unknown" as const, message: "WebSocket bridge is starting." }
+}
+
+export function resetWebSocketBridgeState() {
+  const state = globalForBridge.manifestWsBridge
+  if (!state) return
+
+  state.currentThreadId = null
+  state.pendingInputs = []
+  if (state.pendingThreadTimer) clearTimeout(state.pendingThreadTimer)
+  state.pendingThreadTimer = null
+  state.persistence = createPersistenceState()
+}
+
+export async function handleClientMessage(socket: WsSocket, data: string, sandboxDir: string, state: BridgeState) {
   const message = parseClientMessage(data)
   if (!message?.text) return
 
@@ -95,26 +142,41 @@ async function handleClientMessage(socket: WsSocket, data: string, sandboxDir: s
     await checkModeration(message.text)
   } catch (error) {
     if (error instanceof ModerationError) {
-      socket.send(JSON.stringify({ error: "That prompt can't be used — please try different wording.", flagged: true }))
+      sendToClient(socket, { type: "moderation-blocked", error: "That prompt can't be used — please try different wording.", flagged: true })
       return
     }
-    throw error
+    sendToClient(socket, {
+      type: "bridge-error",
+      error: error instanceof Error ? error.message : "Bridge failed while checking the request.",
+    })
+    return
   }
 
   const appServer = startServerIfAvailable(sandboxDir)
   if (!appServer) {
-    socket.send(JSON.stringify({ type: "app-server-unavailable", error: "App Server not running" }))
+    clearPendingThreadStart(state)
+    sendToClient(socket, { type: "app-server-unavailable", error: "App-server unavailable." })
     return
   }
 
   if (!state.currentThreadId) {
     state.pendingInputs.push(message.text)
-    appServer.send(createThreadStartMessage())
+    try {
+      appServer.send(createThreadStartMessage())
+      schedulePendingThreadTimeout(state)
+    } catch {
+      clearPendingThreadStart(state)
+      sendToClient(socket, { type: "app-server-unavailable", error: "App-server unavailable." })
+    }
     return
   }
 
   await persistFeatureRequest(state.persistence, message.text)
-  appServer.send(createTurnStartMessage(state.currentThreadId, message.text, sandboxDir))
+  try {
+    appServer.send(createTurnStartMessage(state.currentThreadId, message.text, sandboxDir))
+  } catch {
+    sendToClient(socket, { type: "app-server-unavailable", error: "App-server unavailable." })
+  }
 }
 
 function startServerIfAvailable(sandboxDir: string) {
@@ -132,15 +194,50 @@ async function handleAppServerEvent(event: AppServerEvent, state: BridgeState, s
 
   await persistAppServerEvent(event, state.persistence, sandboxDir)
 
+  if (method === "app-server-unavailable") {
+    clearPendingThreadStart(state)
+    return
+  }
+
   if (method === "thread/started" && threadId) {
+    if (state.pendingThreadTimer) clearTimeout(state.pendingThreadTimer)
+    state.pendingThreadTimer = null
     state.currentThreadId = threadId
     state.persistence.currentThreadId = threadId
     const appServer = getAppServerClient()
     const nextInput = state.pendingInputs.shift()
     if (appServer && nextInput) {
       await persistFeatureRequest(state.persistence, nextInput)
-      appServer.send(createTurnStartMessage(threadId, nextInput, sandboxDir))
+      try {
+        appServer.send(createTurnStartMessage(threadId, nextInput, sandboxDir))
+      } catch {
+        clearPendingThreadStart(state)
+        eventBus.emit("app-server-event", { type: "app-server-unavailable", error: "App-server unavailable." })
+      }
     }
+  }
+}
+
+function schedulePendingThreadTimeout(state: BridgeState) {
+  if (state.pendingThreadTimer) clearTimeout(state.pendingThreadTimer)
+  state.pendingThreadTimer = setTimeout(() => {
+    clearPendingThreadStart(state)
+    eventBus.emit("app-server-event", {
+      type: "bridge-request-timeout",
+      error: "The request timed out before the agent started.",
+    })
+  }, 30_000)
+}
+
+function clearPendingThreadStart(state: BridgeState) {
+  state.pendingInputs = []
+  if (state.pendingThreadTimer) clearTimeout(state.pendingThreadTimer)
+  state.pendingThreadTimer = null
+}
+
+function sendToClient(socket: WsSocket, event: AppServerEvent) {
+  if (socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify(event))
   }
 }
 

@@ -1,0 +1,74 @@
+name: Codex PR Review
+
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number to review
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  review:
+    name: Run Codex review
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.issue.pull_request && contains(github.event.comment.body, '/codex-review'))
+
+    steps:
+      - name: Resolve pull request
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          COMMENT_PR: ${{ github.event.issue.number }}
+          INPUT_PR: ${{ inputs.pr_number }}
+        run: |
+          set -euo pipefail
+          pr_number="${INPUT_PR:-$COMMENT_PR}"
+          base_ref="$(gh pr view "$pr_number" --json baseRefName --jq .baseRefName)"
+          echo "number=$pr_number" >> "$GITHUB_OUTPUT"
+          echo "base_ref=$base_ref" >> "$GITHUB_OUTPUT"
+
+      - name: Check out pull request
+        uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ steps.pr.outputs.number }}/head
+          fetch-depth: 0
+
+      - name: Fetch base branch
+        run: git fetch origin ${{ steps.pr.outputs.base_ref }} --depth=1
+
+      - name: Install Codex CLI
+        run: npm install -g @openai/codex
+
+      - name: Run Codex review
+        id: codex
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CODEX_API_KEY: ${{ secrets.CODEX_API_KEY || secrets.OPENAI_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CODEX_API_KEY:-}" ]; then
+            printf '%s\n' 'Codex review could not run because neither `CODEX_API_KEY` nor `OPENAI_API_KEY` is configured as a repository secret.' > codex-review.md
+            exit 0
+          fi
+
+          codex review \
+            --base "origin/${{ steps.pr.outputs.base_ref }}" \
+            "Review this Manifest pull request for correctness, test coverage, Docker/runtime risks, security issues, and publication readiness. Lead with actionable findings and include file references." \
+            > codex-review.md
+
+      - name: Comment with Codex review
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr comment "${{ steps.pr.outputs.number }}" --body-file codex-review.md

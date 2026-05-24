@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify application
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            sandbox/package-lock.json
+
+      - name: Install main dependencies
+        run: npm ci
+
+      - name: Install sandbox dependencies
+        run: npm --prefix sandbox ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test main app
+        run: npm run test:run
+
+      - name: Build main app
+        run: npm run build
+
+      - name: Test sandbox app
+        run: npm --prefix sandbox run test:run
+
+      - name: Build sandbox app
+        run: npm --prefix sandbox run build
+
+  docker:
+    name: Build Docker images
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build compose images
+        run: docker compose build

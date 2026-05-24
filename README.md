@@ -2,14 +2,6 @@
 
 Manifest is a local, agent-assisted product catalogue workspace. The main app provides auth, prompts, event streaming, rollback/reset controls, debug history, and image generation. A separate sandbox catalogue runs in an iframe so Codex can rewrite catalogue source files while the user watches changes hot-reload.
 
-## Screenshots
-
-Add current screenshots before publishing:
-
-- `docs/screenshots/catalogue-workspace.png`
-- `docs/screenshots/agent-stream.png`
-- `docs/screenshots/image-generation.png`
-
 ## Tech Stack
 
 - Next.js 15 App Router, React 19, TypeScript, Tailwind CSS
@@ -72,26 +64,50 @@ Open:
 Useful commands:
 
 ```bash
-npm run test -- --run
+npm run verify
+npm run lint
+npm run typecheck
+npm run test:run
 npm run build
-cd sandbox && npm run test -- --run
-cd sandbox && npm run build
 ```
+
+`npm run verify` runs the same local quality gates as CI: lint, typecheck, main app tests/build, and sandbox tests/build.
 
 ## Docker
 
-The repository includes a `docker-compose.yml` for running the main app, sandbox app, and SQLite data volume together.
+The repository includes a production-like `docker-compose.yml` for running the main app, sandbox app, bridge, and SQLite data volume together. The main app runs from `next build`/`next start`; the sandbox runs inside Docker so Codex edits and the preview server share the same containerized workspace. Compose defaults to debug auth, so `/catalogue` opens without Auth0 setup.
 
 ```bash
 docker compose up --build
 ```
 
-Pass `OPENAI_API_KEY` and `NEXTAUTH_SECRET` from your shell or an uncommitted `.env.local`.
+Pass `OPENAI_API_KEY` and optionally `CODEX_API_KEY` from your shell or an uncommitted `.env.local` for agent and image features. `NEXTAUTH_SECRET` defaults to a local debug value in Compose; set it explicitly when testing real auth. To test real OAuth in Docker, rebuild with `DOCKER_DEBUG_AUTH=false` and provide the Auth0 variables.
+
+Open:
+
+- Main app: `http://localhost:3000/catalogue`
+- Sandbox app: `http://localhost:3001`
+- WebSocket bridge: `ws://localhost:3002/api/ws`
+
+Useful Docker checks:
+
+```bash
+docker compose ps
+docker compose logs app sandbox
+```
+
+## CI and Codex Review
+
+GitHub Actions runs linting, typechecking, tests, production builds, and Docker image builds on pull requests and pushes to `main`.
+
+The repository also includes an on-demand Codex PR review workflow. Comment `/codex-review` on a pull request, or run the `Codex PR Review` workflow manually, to ask Codex for a focused review of correctness, test coverage, Docker/runtime risk, security, and publication readiness. Configure either `CODEX_API_KEY` or `OPENAI_API_KEY` as a repository secret before using that workflow.
 
 ## Troubleshooting
 
 - If `/catalogue` redirects to login during local development, set `DEBUG_AUTH=true`.
-- If feature requests show "App Server not running", confirm the `codex` CLI is installed and `CODEX_API_KEY` is set.
+- If the laptop resumes with stale local processes, prefer the Docker path: `docker compose down` and then `docker compose up --build`.
+- If the catalogue panel says "Sandbox unavailable", check `docker compose ps`, then restart the sandbox with `docker compose restart sandbox` and use `Check again`.
+- If feature requests show app-server or bridge errors, confirm `OPENAI_API_KEY` or `CODEX_API_KEY` is set and inspect `docker compose logs app`.
 - If reset fails, run `npm run sandbox:init` to recreate the sandbox git repository and `baseline` tag.
 - If generated images do not appear, check `OPENAI_API_KEY`, moderation errors, and write access to `sandbox/public/images/`.
 

@@ -1,32 +1,50 @@
 services:
   app:
-    build: .
-    command: npm run dev
+    build:
+      context: .
+      args:
+        DEBUG_AUTH: ${DOCKER_DEBUG_AUTH:-true}
     ports:
       - "3000:3000"
+      - "3002:3002"
     volumes:
-      - .:/app
-      - /app/node_modules
       - db_data:/app/data
       - sandbox_src:/app/sandbox
+      - sandbox_node_modules:/app/sandbox/node_modules
     environment:
       DATABASE_URL: file:/app/data/dev.db
-      DEBUG_AUTH: "true"
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      DEBUG_AUTH: ${DOCKER_DEBUG_AUTH:-true}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-manifest-debug-secret-change-me}
       NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SANDBOX_PUBLIC_URL: http://localhost:3001
+      SANDBOX_INTERNAL_URL: http://sandbox:3001
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      CODEX_API_KEY: ${CODEX_API_KEY:-}
     depends_on:
-      - sandbox
+      sandbox:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
 
   sandbox:
     build: ./sandbox
-    command: npm run dev -- --port 3001
     ports:
       - "3001:3001"
     volumes:
       - sandbox_src:/sandbox
-      - /sandbox/node_modules
+      - sandbox_node_modules:/sandbox/node_modules
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
 
 volumes:
   db_data:
   sandbox_src:
+  sandbox_node_modules:
