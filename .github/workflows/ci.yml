@@ -42,6 +42,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Audit runtime dependencies
+        run: npm run security:audit
+
       - name: Test main app
         run: npm run test:run
 

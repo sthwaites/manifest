@@ -11,7 +11,8 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit && npm --prefix sandbox run typecheck",
     "test:run": "vitest --run",
-    "verify": "npm run lint && npm run typecheck && npm run test:run && npm run build && npm --prefix sandbox run test:run && npm --prefix sandbox run build"
+    "verify": "npm run lint && npm run typecheck && npm run security:audit && npm run test:run && npm run build && npm --prefix sandbox run test:run && npm --prefix sandbox run build",
+    "security:audit": "npm audit --omit=dev --audit-level=moderate && npm --prefix sandbox audit --omit=dev --audit-level=moderate"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.7.4",
@@ -45,5 +46,8 @@
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
+  },
+  "overrides": {
+    "postcss": "^8.5.10"
   }
 }
