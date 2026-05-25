@@ -2,9 +2,10 @@
 
 import { ProductCard } from "../components/ProductCard"
 import { products as seedProducts, type Product } from "../data/products"
+import { withSandboxBasePath } from "../lib/paths"
 import { useEffect, useState } from "react"
 
-const IMAGE_OVERRIDES_URL = "/image-overrides.json"
+const IMAGE_OVERRIDES_URL = withSandboxBasePath("/image-overrides.json")
 const IMAGE_OVERRIDES_POLL_MS = 2000
 
 export default function SandboxHomePage() {

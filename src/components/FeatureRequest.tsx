@@ -131,13 +131,7 @@ export function FeatureRequest({
         Boolean(navigator.mediaDevices),
     );
 
-    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-    const localHost =
-      window.location.hostname === "localhost" ||
-      window.location.hostname === "127.0.0.1";
-    const primaryUrl = localHost
-      ? `${protocol}://${window.location.hostname}:3002/api/ws`
-      : `${protocol}://${window.location.host}/api/ws`;
+    const primaryUrl = getWebSocketUrl(window.location, process.env.NEXT_PUBLIC_WS_URL);
     const socket = connect(primaryUrl);
 
     function connect(url: string) {
@@ -521,6 +515,19 @@ export function FeatureRequest({
       ) : null}
     </div>
   );
+}
+
+export function getWebSocketUrl(location: Pick<Location, "protocol" | "hostname" | "host" | "port">, configuredUrl?: string) {
+  if (configuredUrl) return configuredUrl;
+  const protocol = location.protocol === "https:" ? "wss" : "ws";
+  const localHost =
+    location.hostname === "localhost" ||
+    location.hostname === "127.0.0.1";
+  const localDevServer = localHost && location.port === "3000";
+
+  return localDevServer
+    ? `${protocol}://${location.hostname}:3002/api/ws`
+    : `${protocol}://${location.host}/api/ws`;
 }
 
 const progressStages: Array<{ id: ProgressStage; label: string }> = [

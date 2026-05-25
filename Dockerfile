@@ -35,7 +35,9 @@ RUN apt-get update \
   && git config --global user.email "manifest-agent@example.invalid"
 
 COPY --from=builder /app ./
-RUN npm prune --omit=dev
+RUN cp -a sandbox sandbox-template \
+  && npm prune --omit=dev
 
 EXPOSE 3000
-CMD ["sh", "-c", "npx prisma migrate deploy && npm run sandbox:init && npm run start"]
+EXPOSE 8080
+CMD ["npm", "run", "start:container"]

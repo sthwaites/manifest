@@ -6,6 +6,8 @@
     "dev": "next dev --port 3000",
     "build": "next build",
     "start": "next start --hostname 0.0.0.0 --port 3000",
+    "start:container": "node scripts/start-container.mjs",
+    "proxy": "node scripts/proxy-server.mjs",
     "test": "vitest",
     "sandbox:init": "bash scripts/init-sandbox-git.sh",
     "lint": "eslint .",

@@ -45,6 +45,10 @@ For local development without OAuth, set `DEBUG_AUTH=true`.
 | `AUTH0_CLIENT_SECRET` | OAuth only | Auth0 application client secret.                                                    |
 | `AUTH0_ISSUER`        | OAuth only | Auth0 issuer URL.                                                                   |
 | `DEBUG_AUTH`          | Local only | Set to `true` to bypass OAuth locally.                                              |
+| `NEXT_PUBLIC_SANDBOX_PUBLIC_URL` | Deploy only | Browser URL for the iframe. Use `http://localhost:3001/` locally and `/sandbox/` on Fly. |
+| `SANDBOX_INTERNAL_URL` | Deploy only | Server-side sandbox health URL. Use `http://localhost:3001` locally and `http://localhost:3001/sandbox` on Fly. |
+| `SANDBOX_BASE_PATH`   | Deploy only | Public path used by the proxy for the sandbox, usually `/sandbox`.                  |
+| `NEXT_PUBLIC_SANDBOX_BASE_PATH` | Deploy only | Same value as `SANDBOX_BASE_PATH`; lets the sandbox prefix images and Next assets. |
 
 ## Development
 
@@ -102,6 +106,45 @@ CI publishes successful `main` builds to GHCR:
 - `ghcr.io/sthwaites/manifest-sandbox:latest`
 - `ghcr.io/sthwaites/manifest-app:sha-<short-sha>`
 - `ghcr.io/sthwaites/manifest-sandbox:sha-<short-sha>`
+
+## Fly.io
+
+Fly uses the root `Dockerfile` and `fly.toml` to run one public Machine. Inside that single container, the production Manifest app listens on port `3000`, the sandbox Next dev server listens on port `3001`, the Codex WebSocket bridge listens on port `3002` when opened by the app, and `scripts/proxy-server.mjs` exposes one public HTTP service on port `8080`.
+
+Public routing:
+
+- `/` and `/catalogue` proxy to the Manifest app.
+- `/api/ws` proxies to the WebSocket bridge.
+- `/sandbox/` proxies to the sandbox app, with the sandbox built under the `/sandbox` base path.
+
+Before the first deploy, change the `app` and `NEXTAUTH_URL` values in `fly.toml` or pass your own app name through `fly launch --copy-config --name <your-fly-app-name>`.
+
+Create one Fly volume for both SQLite data and the mutable sandbox working tree:
+
+```bash
+fly volumes create manifest_data --size 3 --region lhr
+```
+
+The volume mounts at `/app/persist`. The app stores SQLite data under `/app/persist/data`, and the startup script copies the bundled sandbox template into `/app/persist/sandbox` on first boot, then symlinks `/app/sandbox` there so Codex edits, generated images, and sandbox git history survive restarts and deploys.
+
+Set runtime secrets:
+
+```bash
+fly secrets set \
+  NEXTAUTH_SECRET="$(openssl rand -base64 32)" \
+  OPENAI_API_KEY="sk-..." \
+  CODEX_API_KEY="sk-..."
+```
+
+`CODEX_API_KEY` is used by the `codex app-server` process. If your Codex and OpenAI credentials are the same, set both to the same value. `DATABASE_URL` is intentionally in `fly.toml` as `file:/app/persist/data/prod.db`; update it only if you move the mounted volume.
+
+Deploy:
+
+```bash
+fly deploy
+```
+
+Compose remains the recommended local production-like flow. It still runs the Manifest app and sandbox as separate local containers and keeps the browser iframe at `http://localhost:3001/`.
 
 ## CI and Codex Review
 

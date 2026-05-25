@@ -8,7 +8,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { FeatureRequest } from "./FeatureRequest";
+import { FeatureRequest, getWebSocketUrl } from "./FeatureRequest";
 import type { AgentEvent } from "./AgentStream";
 
 class MockWebSocket extends EventTarget {
@@ -61,6 +61,17 @@ describe("FeatureRequest", () => {
     renderFeatureRequest();
 
     expect(MockWebSocket.instances[0]?.url).toBe("ws://localhost:3002/api/ws");
+  });
+
+  it("uses the current origin when localhost is serving through a proxy", () => {
+    expect(
+      getWebSocketUrl({
+        protocol: "http:",
+        hostname: "localhost",
+        host: "localhost:18080",
+        port: "18080",
+      }),
+    ).toBe("ws://localhost:18080/api/ws");
   });
 
   it("renders a larger composer and staged progress from WebSocket events", async () => {
