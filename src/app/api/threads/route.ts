@@ -12,12 +12,18 @@ export async function GET() {
     return Response.json({ error: "Unauthorized" }, { status: 401 })
   }
 
+  const activeFeatureStatuses = ["pending", "applied"]
   const threads = await prisma.thread.findMany({
-    where: { userId: session.user.id },
+    where: {
+      userId: session.user.id,
+      features: {
+        some: { status: { in: activeFeatureStatuses } },
+      },
+    },
     orderBy: { updatedAt: "desc" },
     include: {
       features: {
-        where: { status: { in: ["pending", "applied"] } },
+        where: { status: { in: activeFeatureStatuses } },
         select: { id: true },
       },
     },

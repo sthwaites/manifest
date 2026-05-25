@@ -37,11 +37,10 @@ describe("/api/threads", () => {
     expect(response.status).toBe(401)
   })
 
-  it("returns threads for authenticated GET", async () => {
+  it("returns only threads with active features for authenticated GET", async () => {
     authMock.mockResolvedValue({ user: { id: "user_1", email: "dev@localhost" } })
     prismaMock.thread.findMany.mockResolvedValue([
       { id: "thread_1", features: [{ id: "feature_1" }, { id: "feature_2" }] },
-      { id: "thread_2", features: [] },
     ])
     const { GET } = await import("./route")
 
@@ -49,19 +48,25 @@ describe("/api/threads", () => {
 
     expect(response.status).toBe(200)
     expect(prismaMock.thread.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
+      {
+        where: {
+          userId: "user_1",
+          features: {
+            some: { status: { in: ["pending", "applied"] } },
+          },
+        },
+        orderBy: { updatedAt: "desc" },
         include: {
           features: {
             where: { status: { in: ["pending", "applied"] } },
             select: { id: true },
           },
         },
-      }),
+      },
     )
     await expect(response.json()).resolves.toEqual({
       threads: [
         { id: "thread_1", _count: { features: 2 } },
-        { id: "thread_2", _count: { features: 0 } },
       ],
     })
   })
