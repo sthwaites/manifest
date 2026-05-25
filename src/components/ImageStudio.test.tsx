@@ -92,6 +92,25 @@ describe("ImageStudio", () => {
     )
   })
 
+  it("opens the generated image in a full-size overlay and closes it", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ url: "/images/prod_001-generated.png" })))
+    render(<ImageStudio products={products} sandboxWindow={null} />)
+
+    await userEvent.click(screen.getByRole("button", { name: "Generate" }))
+    await userEvent.click(await screen.findByRole("button", { name: "Open generated Ceramic Pour-Over Coffee Set preview" }))
+
+    const dialog = screen.getByRole("dialog", { name: "Generated Ceramic Pour-Over Coffee Set full-size preview" })
+    expect(dialog).toBeInTheDocument()
+    expect(screen.getByRole("img", { name: "Generated Ceramic Pour-Over Coffee Set full size" })).toHaveAttribute(
+      "src",
+      "/images/prod_001-generated.png",
+    )
+
+    await userEvent.click(screen.getByRole("button", { name: "Close generated image preview" }))
+
+    expect(screen.queryByRole("dialog", { name: "Generated Ceramic Pour-Over Coffee Set full-size preview" })).not.toBeInTheDocument()
+  })
+
   it("shows an animated status while generating", async () => {
     vi.stubGlobal("fetch", vi.fn(() => new Promise(() => undefined)))
     render(<ImageStudio products={products} sandboxWindow={null} />)

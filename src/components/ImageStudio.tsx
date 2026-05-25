@@ -1,6 +1,6 @@
 "use client"
 
-import { ImagePlus, Mic, WandSparkles } from "lucide-react"
+import { ImagePlus, Mic, WandSparkles, X } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 
 type StudioProduct = {
@@ -33,6 +33,7 @@ export function ImageStudio({ products, sandboxWindow }: ImageStudioProps) {
   const [context, setContext] = useState("")
   const [style, setStyle] = useState<"lifestyle" | "in-use">("lifestyle")
   const [generatedUrl, setGeneratedUrl] = useState<string | null>(null)
+  const [expandedPreview, setExpandedPreview] = useState(false)
   const [state, setState] = useState<GenerationState>("idle")
   const [error, setError] = useState<string | null>(null)
   const [supportsRecording, setSupportsRecording] = useState(false)
@@ -49,6 +50,7 @@ export function ImageStudio({ products, sandboxWindow }: ImageStudioProps) {
     if (!selectedProduct) return
     setContext("")
     setGeneratedUrl(null)
+    setExpandedPreview(false)
     setError(null)
     setState("idle")
   }, [selectedProduct])
@@ -74,6 +76,7 @@ export function ImageStudio({ products, sandboxWindow }: ImageStudioProps) {
       if (!response.ok) throw new Error(payload.error ?? "Image generation failed.")
       if (!payload.url) throw new Error("Image generation finished without an image URL.")
       setGeneratedUrl(payload.url)
+      setExpandedPreview(false)
       setState("ready")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Image generation failed.")
@@ -184,11 +187,18 @@ export function ImageStudio({ products, sandboxWindow }: ImageStudioProps) {
                   Generating image
                 </div>
               ) : generatedUrl ? (
-                <img
-                  src={generatedUrl}
-                  alt={`Generated ${selectedProduct.name}`}
-                  className="h-full w-full object-cover opacity-100 transition-opacity duration-300"
-                />
+                <button
+                  type="button"
+                  aria-label={`Open generated ${selectedProduct.name} preview`}
+                  onClick={() => setExpandedPreview(true)}
+                  className="h-full w-full cursor-zoom-in overflow-hidden text-left outline-none transition focus-visible:ring-2 focus-visible:ring-indigo-400"
+                >
+                  <img
+                    src={generatedUrl}
+                    alt={`Generated ${selectedProduct.name}`}
+                    className="h-full w-full object-cover opacity-100 transition duration-300 hover:scale-[1.02]"
+                  />
+                </button>
               ) : (
                 <span className="px-3 text-center text-xs text-zinc-500">Generate to preview</span>
               )}
@@ -262,6 +272,30 @@ export function ImageStudio({ products, sandboxWindow }: ImageStudioProps) {
           {state === "ready" ? <p className="text-sm text-emerald-400">Image ready. Apply it to update the preview.</p> : null}
           {transcribing ? <p className="text-sm text-zinc-400">Transcribing...</p> : null}
           {error ? <p className="text-sm text-rose-400">{error}</p> : null}
+          {expandedPreview && generatedUrl ? (
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Generated ${selectedProduct.name} full-size preview`}
+              className="fixed inset-0 z-50 grid place-items-center bg-black/85 p-4"
+            >
+              <div className="relative max-h-full w-full max-w-5xl">
+                <button
+                  type="button"
+                  aria-label="Close generated image preview"
+                  onClick={() => setExpandedPreview(false)}
+                  className="absolute right-2 top-2 z-10 grid size-9 place-items-center rounded-md border border-zinc-700 bg-zinc-950/90 text-zinc-200 shadow-lg transition hover:border-zinc-400 hover:text-white"
+                >
+                  <X className="size-4" />
+                </button>
+                <img
+                  src={generatedUrl}
+                  alt={`Generated ${selectedProduct.name} full size`}
+                  className="max-h-[calc(100vh-2rem)] w-full rounded-md object-contain"
+                />
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : (
         <p className="text-sm text-zinc-400">No products available.</p>
