@@ -23,6 +23,9 @@ type GenerateResponse = {
 }
 
 type GenerationState = "idle" | "generating" | "ready" | "error"
+type ApplyImageResponse = {
+  error?: string
+}
 
 export function ImageStudio({ products, sandboxWindow }: ImageStudioProps) {
   const [selectedProductId, setSelectedProductId] = useState(products[0]?.id ?? "")
@@ -36,6 +39,7 @@ export function ImageStudio({ products, sandboxWindow }: ImageStudioProps) {
   const [expandedPreview, setExpandedPreview] = useState(false)
   const [state, setState] = useState<GenerationState>("idle")
   const [error, setError] = useState<string | null>(null)
+  const [applying, setApplying] = useState(false)
   const [supportsRecording, setSupportsRecording] = useState(false)
   const [recording, setRecording] = useState(false)
   const [transcribing, setTranscribing] = useState(false)
@@ -84,9 +88,25 @@ export function ImageStudio({ products, sandboxWindow }: ImageStudioProps) {
     }
   }
 
-  function useImage() {
+  async function applyImage() {
     if (!generatedUrl || !selectedProduct) return
-    sandboxWindow?.postMessage({ type: "useImage", productId: selectedProduct.id, url: generatedUrl }, "*")
+    setApplying(true)
+    setError(null)
+
+    try {
+      const response = await fetch("/api/images/apply", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ productId: selectedProduct.id, url: generatedUrl }),
+      })
+      const payload = (await response.json()) as ApplyImageResponse
+      if (!response.ok) throw new Error(payload.error ?? "Image could not be applied.")
+      sandboxWindow?.postMessage({ type: "useImage", productId: selectedProduct.id, url: generatedUrl }, "*")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Image could not be applied.")
+    } finally {
+      setApplying(false)
+    }
   }
 
   async function startRecording() {
@@ -261,11 +281,11 @@ export function ImageStudio({ products, sandboxWindow }: ImageStudioProps) {
             </button>
             <button
               type="button"
-              onClick={useImage}
-              disabled={!generatedUrl}
+              onClick={() => void applyImage()}
+              disabled={!generatedUrl || applying}
               className="h-10 rounded-md border border-zinc-700 px-4 text-sm font-medium text-zinc-100 transition hover:border-emerald-500 hover:text-emerald-400 disabled:opacity-50"
             >
-              Use this image
+              {applying ? "Applying..." : "Use this image"}
             </button>
           </div>
 

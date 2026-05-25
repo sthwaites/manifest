@@ -73,7 +73,11 @@ describe("ImageStudio", () => {
 
   it("generates, previews, and applies an image to the sandbox window", async () => {
     const sandboxWindow = { postMessage: vi.fn() } as unknown as Window
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ url: "/images/prod_001-generated.png" })))
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ url: "/images/prod_001-generated.png" }))
+      .mockResolvedValueOnce(jsonResponse({ overrides: { prod_001: "/images/prod_001-generated.png" } }))
+    vi.stubGlobal("fetch", fetchMock)
     render(<ImageStudio products={products} sandboxWindow={sandboxWindow} />)
 
     await userEvent.click(screen.getByRole("button", { name: "Generate" }))
@@ -86,10 +90,34 @@ describe("ImageStudio", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Use this image" }))
 
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/images/apply",
+      expect.objectContaining({
+        body: JSON.stringify({ productId: "prod_001", url: "/images/prod_001-generated.png" }),
+      }),
+    )
     expect(sandboxWindow.postMessage).toHaveBeenCalledWith(
       { type: "useImage", productId: "prod_001", url: "/images/prod_001-generated.png" },
       "*",
     )
+  })
+
+  it("shows an error when applying an image fails", async () => {
+    const sandboxWindow = { postMessage: vi.fn() } as unknown as Window
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(jsonResponse({ url: "/images/prod_001-generated.png" }))
+        .mockResolvedValueOnce(jsonResponse({ error: "Image override could not be saved." }, false)),
+    )
+    render(<ImageStudio products={products} sandboxWindow={sandboxWindow} />)
+
+    await userEvent.click(screen.getByRole("button", { name: "Generate" }))
+    await userEvent.click(await screen.findByRole("button", { name: "Use this image" }))
+
+    expect(await screen.findByText("Image override could not be saved.")).toBeInTheDocument()
+    expect(sandboxWindow.postMessage).not.toHaveBeenCalled()
   })
 
   it("opens the generated image in a full-size overlay and closes it", async () => {
@@ -208,6 +236,7 @@ describe("ImageStudio", () => {
 function jsonResponse(body: unknown, ok = true) {
   return {
     ok,
+    json: async () => body,
     text: async () => JSON.stringify(body),
   }
 }
