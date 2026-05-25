@@ -90,6 +90,7 @@ export function ImageStudio({ products, sandboxWindow }: ImageStudioProps) {
     if (!supportsRecording || recording) return
 
     try {
+      setError(null)
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       const recorder = new MediaRecorder(stream)
       chunksRef.current = []
@@ -101,7 +102,7 @@ export function ImageStudio({ products, sandboxWindow }: ImageStudioProps) {
         stream.getTracks().forEach((track) => track.stop())
         void transcribeRecording()
       })
-      recorder.start()
+      recorder.start(250)
       setRecording(true)
     } catch {
       setError("Microphone access was not available.")
@@ -112,6 +113,14 @@ export function ImageStudio({ products, sandboxWindow }: ImageStudioProps) {
     if (!recording) return
     setRecording(false)
     recorderRef.current?.stop()
+  }
+
+  function toggleRecording() {
+    if (recording) {
+      stopRecording()
+      return
+    }
+    void startRecording()
   }
 
   async function transcribeRecording() {
@@ -199,14 +208,13 @@ export function ImageStudio({ products, sandboxWindow }: ImageStudioProps) {
               {supportsRecording ? (
                 <button
                   type="button"
-                  aria-label="Record image prompt"
-                  onMouseDown={startRecording}
-                  onMouseUp={stopRecording}
-                  onTouchStart={startRecording}
-                  onTouchEnd={stopRecording}
+                  aria-label={recording ? "Stop recording image prompt" : "Record image prompt"}
+                  aria-pressed={recording}
+                  onClick={toggleRecording}
+                  disabled={transcribing}
                   className={`grid size-10 shrink-0 place-items-center rounded-md border border-zinc-700 transition ${
                     recording ? "animate-pulse border-rose-500 text-rose-500" : "text-zinc-400 hover:text-zinc-200"
-                  }`}
+                  } disabled:opacity-50`}
                 >
                   <Mic className="size-4" />
                 </button>

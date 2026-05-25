@@ -11,15 +11,27 @@ export async function POST(req: Request) {
   const file = formData.get("audio")
   if (!(file instanceof File)) return Response.json({ error: "No audio" }, { status: 400 })
 
-  const transcription = await getOpenAI().audio.transcriptions.create({
-    file,
-    model: "whisper-1",
-  })
+  try {
+    const transcription = await getOpenAI().audio.transcriptions.create({
+      file,
+      model: "whisper-1",
+    })
 
-  return Response.json({ text: transcription.text })
+    return Response.json({ text: transcription.text })
+  } catch (error) {
+    if (isOpenAIError(error, "audio_too_short")) {
+      return Response.json({ error: "Record for at least one second before transcribing." }, { status: 400 })
+    }
+    console.error(error)
+    return Response.json({ error: "Transcription failed. Try recording again." }, { status: 500 })
+  }
 }
 
 function getOpenAI() {
   openai ??= new OpenAI()
   return openai
+}
+
+function isOpenAIError(error: unknown, code: string) {
+  return Boolean(error && typeof error === "object" && "code" in error && (error as { code?: unknown }).code === code)
 }

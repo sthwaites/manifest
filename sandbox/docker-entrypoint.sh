@@ -53,4 +53,6 @@ fi
 
 sync_node_modules
 
+rm -rf "$workspace_dir/.next"
+
 exec "$@"

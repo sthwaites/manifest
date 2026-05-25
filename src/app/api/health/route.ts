@@ -10,7 +10,7 @@ type ServiceHealth = {
   message: string
 }
 
-const SANDBOX_TIMEOUT_MS = 1500
+const SANDBOX_TIMEOUT_MS = 8000
 
 export async function GET() {
   const sandbox = await checkSandbox()

@@ -18,8 +18,9 @@ RUN apk add --no-cache git
 
 COPY --from=builder /sandbox-template /sandbox-template
 COPY docker-entrypoint.sh /usr/local/bin/manifest-sandbox-entrypoint
-RUN chmod +x /usr/local/bin/manifest-sandbox-entrypoint
+COPY serve-dev.sh /usr/local/bin/manifest-sandbox-serve-dev
+RUN chmod +x /usr/local/bin/manifest-sandbox-entrypoint /usr/local/bin/manifest-sandbox-serve-dev
 
 EXPOSE 3001
 ENTRYPOINT ["manifest-sandbox-entrypoint"]
-CMD ["npm", "run", "dev", "--", "--hostname", "0.0.0.0", "--port", "3001"]
+CMD ["manifest-sandbox-serve-dev"]

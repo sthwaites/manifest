@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react"
+import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { ImageStudio } from "./ImageStudio"
@@ -174,11 +174,12 @@ describe("ImageStudio", () => {
     render(<ImageStudio products={products} sandboxWindow={null} />)
 
     const micButton = await screen.findByRole("button", { name: "Record image prompt" })
-    fireEvent.mouseDown(micButton)
+    await userEvent.click(micButton)
     await screen.findByPlaceholderText("Listening...")
-    fireEvent.mouseUp(micButton)
+    await userEvent.click(screen.getByRole("button", { name: "Stop recording image prompt" }))
 
     expect(mediaRecorderInstances[0].start).toHaveBeenCalled()
+    expect(mediaRecorderInstances[0].start).toHaveBeenCalledWith(250)
     expect(mediaRecorderInstances[0].stop).toHaveBeenCalled()
     expect(stopTrack).toHaveBeenCalled()
     expect(await screen.findByDisplayValue("on a marble counter")).toBeInTheDocument()
