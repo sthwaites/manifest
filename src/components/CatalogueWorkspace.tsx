@@ -68,14 +68,15 @@ export function CatalogueWorkspace({ userName = null, userEmail = null, debugAut
   }, [checkSandboxHealth])
 
   const appendEvent = useCallback((event: AgentEvent) => {
+    const eventType = event.method ?? event.type
     setEvents((current) => [...current, event])
 
-    if (event.type === "fileChange") {
+    if (eventType === "fileChange") {
       setFlash("hot")
       window.setTimeout(() => setFlash(null), 600)
     }
 
-    if (event.type === "turn/completed") {
+    if (eventType === "turn/completed") {
       window.setTimeout(() => {
         if (iframeRef.current) {
           // Next dev HMR can miss file changes from the agent process; reload the iframe after a completed turn.

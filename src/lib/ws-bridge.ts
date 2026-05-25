@@ -174,6 +174,11 @@ export async function handleClientMessage(socket: WsSocket, data: string, sandbo
   await persistFeatureRequest(state.persistence, message.text)
   try {
     appServer.send(createTurnStartMessage(state.currentThreadId, message.text, sandboxDir))
+    sendToClient(socket, {
+      type: "turn-started",
+      message: "Agent accepted the request.",
+      threadId: state.currentThreadId,
+    })
   } catch {
     sendToClient(socket, { type: "app-server-unavailable", error: "App-server unavailable." })
   }
@@ -195,7 +200,7 @@ async function handleAppServerEvent(event: AppServerEvent, state: BridgeState, s
   await persistAppServerEvent(event, state.persistence, sandboxDir)
 
   if (method === "app-server-unavailable") {
-    clearPendingThreadStart(state)
+    clearActiveThread(state)
     return
   }
 
@@ -210,8 +215,13 @@ async function handleAppServerEvent(event: AppServerEvent, state: BridgeState, s
       await persistFeatureRequest(state.persistence, nextInput)
       try {
         appServer.send(createTurnStartMessage(threadId, nextInput, sandboxDir))
+        eventBus.emit("app-server-event", {
+          type: "turn-started",
+          message: "Agent accepted the request.",
+          threadId,
+        })
       } catch {
-        clearPendingThreadStart(state)
+        clearActiveThread(state)
         eventBus.emit("app-server-event", { type: "app-server-unavailable", error: "App-server unavailable." })
       }
     }
@@ -233,6 +243,14 @@ function clearPendingThreadStart(state: BridgeState) {
   state.pendingInputs = []
   if (state.pendingThreadTimer) clearTimeout(state.pendingThreadTimer)
   state.pendingThreadTimer = null
+}
+
+function clearActiveThread(state: BridgeState) {
+  clearPendingThreadStart(state)
+  state.currentThreadId = null
+  state.persistence.currentThreadId = null
+  state.persistence.activeFeatureId = null
+  state.persistence.fileChanges = []
 }
 
 function sendToClient(socket: WsSocket, event: AppServerEvent) {

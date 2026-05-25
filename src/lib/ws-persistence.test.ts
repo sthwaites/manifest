@@ -171,4 +171,32 @@ describe("ws persistence", () => {
     expect(execSyncMock).not.toHaveBeenCalled();
     expect(state.activeFeatureId).toBeNull();
   });
+
+  it("marks active features failed when the app-server becomes unavailable", async () => {
+    const { createPersistenceState, persistAppServerEvent } =
+      await import("./ws-persistence");
+    const state = createPersistenceState();
+    state.currentThreadId = "thread_1";
+    state.activeFeatureId = "feature_1";
+    state.fileChanges = ["src/app/page.tsx"];
+
+    await persistAppServerEvent(
+      {
+        type: "app-server-unavailable",
+        error: "App-server exited before the request finished.",
+      },
+      state,
+      "/tmp/sandbox",
+    );
+
+    expect(prismaMock.feature.update).toHaveBeenCalledWith({
+      where: { id: "feature_1" },
+      data: {
+        diff: "App-server exited before the request finished.",
+        status: "failed",
+      },
+    });
+    expect(state.activeFeatureId).toBeNull();
+    expect(state.fileChanges).toEqual([]);
+  });
 });

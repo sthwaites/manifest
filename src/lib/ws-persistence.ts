@@ -62,6 +62,11 @@ export async function persistAppServerEvent(
 
   if (method === "turn/completed") {
     await completeFeature(event, state, sandboxDir);
+    return;
+  }
+
+  if (method === "app-server-unavailable" || method === "bridge-request-timeout") {
+    await failActiveFeature(event, state);
   }
 }
 
@@ -124,6 +129,20 @@ async function completeFeature(
     // A turn may complete without file changes; persistence should still reflect completion.
   }
 
+  state.activeFeatureId = null;
+  state.fileChanges = [];
+}
+
+async function failActiveFeature(event: AppServerEvent, state: PersistenceState) {
+  if (!state.activeFeatureId) return;
+
+  await prisma.feature.update({
+    where: { id: state.activeFeatureId },
+    data: {
+      diff: readString(event, "error") ?? "Request failed before completion.",
+      status: "failed",
+    },
+  });
   state.activeFeatureId = null;
   state.fileChanges = [];
 }

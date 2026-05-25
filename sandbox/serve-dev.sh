@@ -3,13 +3,14 @@ set -eu
 
 port="${PORT:-3001}"
 host="${BIND_HOST:-0.0.0.0}"
-health_url="http://127.0.0.1:${port}"
+base_path="${SANDBOX_BASE_PATH:-${NEXT_PUBLIC_SANDBOX_BASE_PATH:-}}"
+health_url="http://127.0.0.1:${port}${base_path:-/}"
 failure_count=0
 server_pid=""
 
 start_server() {
   rm -rf .next
-  npm run dev -- --hostname "$host" --port "$port" &
+  ./node_modules/.bin/next dev --hostname "$host" --port "$port" &
   server_pid="$!"
   failure_count=0
 }

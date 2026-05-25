@@ -114,6 +114,23 @@ describe("FeatureRequest", () => {
       MockWebSocket.instances[0].dispatchEvent(
         new MessageEvent("message", {
           data: JSON.stringify({
+            type: "turn-started",
+            message: "Agent accepted the request.",
+          }),
+        }),
+      );
+    });
+    await waitFor(() =>
+      expect(screen.getByText("Agent working")).toHaveAttribute(
+        "aria-current",
+        "step",
+      ),
+    );
+
+    act(() => {
+      MockWebSocket.instances[0].dispatchEvent(
+        new MessageEvent("message", {
+          data: JSON.stringify({
             type: "fileChange",
             path: "src/app/page.tsx",
           }),
@@ -350,6 +367,48 @@ describe("FeatureRequest", () => {
       ).not.toBeInTheDocument(),
     );
     expect(screen.getByText("Applied")).toHaveAttribute("aria-current", "step");
+  });
+
+  it("allows another request after a completed turn", async () => {
+    renderFeatureRequest({ threadId: "thread_1" });
+
+    await userEvent.type(
+      screen.getByPlaceholderText(
+        "Describe the catalogue change you want Codex to make...",
+      ),
+      "Add filters",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Submit feature request" }),
+    );
+    act(() => {
+      MockWebSocket.instances[0].dispatchEvent(
+        new MessageEvent("message", {
+          data: JSON.stringify({ method: "turn/completed" }),
+        }),
+      );
+    });
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Submit feature request" }),
+      ).not.toBeDisabled(),
+    );
+    await userEvent.type(
+      screen.getByPlaceholderText(
+        "Describe the catalogue change you want Codex to make...",
+      ),
+      "Make cards denser",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Submit feature request" }),
+    );
+
+    expect(MockWebSocket.instances[0].send).toHaveBeenCalledTimes(2);
+    expect(MockWebSocket.instances[0].send).toHaveBeenLastCalledWith(
+      JSON.stringify({ type: "featureRequest", text: "Make cards denser" }),
+    );
+    expect(screen.getByText("Sending")).toHaveAttribute("aria-current", "step");
   });
 
   it("preserves the prompt when the app-server reports a failed completed turn", async () => {

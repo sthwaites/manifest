@@ -206,6 +206,11 @@ export function FeatureRequest({
               clearTimeout(threadStartTimerRef.current);
             threadStartTimerRef.current = null;
             startAgentTimeout();
+          } else if (eventType === "turn-started") {
+            if (threadStartTimerRef.current)
+              clearTimeout(threadStartTimerRef.current);
+            threadStartTimerRef.current = null;
+            startAgentTimeout();
           } else if (eventType === "turn/completed") {
             clearRequestTimers();
             lastSubmittedPromptRef.current = null;
@@ -554,6 +559,7 @@ function connectionMessage(
 function isAgentActivity(event: AgentEvent) {
   const type = event.method ?? event.type;
   return (
+    type === "turn-started" ||
     type === "commandExecution" ||
     type === "reasoning" ||
     type === "agentMessage" ||
@@ -600,6 +606,7 @@ function nextProgress(
     return turnFailureMessage(event) ? "failed" : "applied";
   if (type === "fileChange") return "applying";
   if (
+    type === "turn-started" ||
     type === "commandExecution" ||
     type === "reasoning" ||
     type === "agentMessage"

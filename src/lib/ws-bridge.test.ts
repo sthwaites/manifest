@@ -7,12 +7,24 @@ const codexServerMock = vi.hoisted(() => ({
   startAppServer: vi.fn(),
 }))
 
+const persistenceMock = vi.hoisted(() => ({
+  createPersistenceState: vi.fn(() => ({
+    currentThreadId: null,
+    activeFeatureId: null,
+    fileChanges: [],
+  })),
+  persistAppServerEvent: vi.fn(),
+  persistFeatureRequest: vi.fn(),
+}))
+
 vi.mock("./moderation", () => ({
   ModerationError: class ModerationError extends Error {},
   checkModeration: vi.fn(),
 }))
 
 vi.mock("./codex-server", () => codexServerMock)
+
+vi.mock("./ws-persistence", () => persistenceMock)
 
 type TestBridgeState = {
   started: boolean
@@ -35,6 +47,8 @@ describe("ws bridge state reset", () => {
     codexServerMock.startAppServer.mockReset()
     codexServerMock.createThreadStartMessage.mockClear()
     codexServerMock.createTurnStartMessage.mockClear()
+    persistenceMock.persistFeatureRequest.mockReset()
+    persistenceMock.persistAppServerEvent.mockReset()
   })
 
   it("clears stale thread and persistence state after sandbox reset", async () => {
@@ -99,6 +113,27 @@ describe("ws bridge state reset", () => {
       error: "App-server unavailable.",
     }))
   })
+
+  it("acknowledges an accepted turn so the UI can leave the sending state", async () => {
+    const { checkModeration } = await import("./moderation")
+    vi.mocked(checkModeration).mockResolvedValueOnce(undefined)
+    const appServer = { send: vi.fn() }
+    codexServerMock.startAppServer.mockReturnValueOnce(appServer)
+    const { handleClientMessage } = await import("./ws-bridge")
+    const state = createState()
+    state.currentThreadId = "thread_1"
+    state.persistence.currentThreadId = "thread_1"
+    const socket = createSocket()
+
+    await handleClientMessage(socket as never, JSON.stringify({ type: "featureRequest", text: "Add filters" }), "/tmp/sandbox", state)
+
+    expect(appServer.send).toHaveBeenCalledWith(expect.objectContaining({ method: "turn/start" }))
+    expect(socket.send).toHaveBeenCalledWith(JSON.stringify({
+      type: "turn-started",
+      message: "Agent accepted the request.",
+      threadId: "thread_1",
+    }))
+  })
 })
 
 function createSocket() {
@@ -108,7 +143,11 @@ function createSocket() {
   }
 }
 
-function createState() {
+function createState(): TestBridgeState & {
+  listenStatus: "listening"
+  listenError: null
+  pendingThreadTimer: null
+} {
   return {
     started: true,
     listenStatus: "listening" as const,
