@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  packages: write
 
 jobs:
   verify:
@@ -58,7 +59,7 @@ jobs:
         run: npm --prefix sandbox run build
 
   docker:
-    name: Build Docker images
+    name: Build and publish Docker images
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
@@ -66,5 +67,44 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v5
 
-      - name: Build compose images
-        run: docker compose build
+      - name: Prepare image metadata
+        id: images
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          owner="$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')"
+          short_sha="${GITHUB_SHA::12}"
+          echo "app=ghcr.io/${owner}/manifest-app" >> "$GITHUB_OUTPUT"
+          echo "sandbox=ghcr.io/${owner}/manifest-sandbox" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${short_sha}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build app image
+        run: |
+          docker build \
+            --label "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}" \
+            --label "org.opencontainers.image.revision=${{ github.sha }}" \
+            --tag "${{ steps.images.outputs.app }}:sha-${{ steps.images.outputs.short_sha }}" \
+            --tag "${{ steps.images.outputs.app }}:latest" \
+            .
+
+      - name: Build sandbox image
+        run: |
+          docker build \
+            --label "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}" \
+            --label "org.opencontainers.image.revision=${{ github.sha }}" \
+            --tag "${{ steps.images.outputs.sandbox }}:sha-${{ steps.images.outputs.short_sha }}" \
+            --tag "${{ steps.images.outputs.sandbox }}:latest" \
+            ./sandbox
+
+      - name: Push images to GHCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          docker push "${{ steps.images.outputs.app }}:sha-${{ steps.images.outputs.short_sha }}"
+          docker push "${{ steps.images.outputs.app }}:latest"
+          docker push "${{ steps.images.outputs.sandbox }}:sha-${{ steps.images.outputs.short_sha }}"
+          docker push "${{ steps.images.outputs.sandbox }}:latest"

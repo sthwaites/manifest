@@ -34,17 +34,17 @@ For local development without OAuth, set `DEBUG_AUTH=true`.
 
 ## Environment Variables
 
-| Variable | Required | Description |
-| --- | --- | --- |
-| `OPENAI_API_KEY` | Yes | Used by OpenAI API routes. |
-| `CODEX_API_KEY` | Yes | Used by the `codex app-server` process. Usually the same value as `OPENAI_API_KEY`. |
-| `DATABASE_URL` | Yes | SQLite URL. Defaults to `file:../data/dev.db`. |
-| `NEXTAUTH_SECRET` | Yes | Secret for NextAuth session signing. |
-| `NEXTAUTH_URL` | Yes | Local URL, usually `http://localhost:3000`. |
-| `AUTH0_CLIENT_ID` | OAuth only | Auth0 application client ID. |
-| `AUTH0_CLIENT_SECRET` | OAuth only | Auth0 application client secret. |
-| `AUTH0_ISSUER` | OAuth only | Auth0 issuer URL. |
-| `DEBUG_AUTH` | Local only | Set to `true` to bypass OAuth locally. |
+| Variable              | Required   | Description                                                                         |
+| --------------------- | ---------- | ----------------------------------------------------------------------------------- |
+| `OPENAI_API_KEY`      | Yes        | Used by OpenAI API routes.                                                          |
+| `CODEX_API_KEY`       | Yes        | Used by the `codex app-server` process. Usually the same value as `OPENAI_API_KEY`. |
+| `DATABASE_URL`        | Yes        | SQLite URL. Defaults to `file:../data/dev.db`.                                      |
+| `NEXTAUTH_SECRET`     | Yes        | Secret for NextAuth session signing.                                                |
+| `NEXTAUTH_URL`        | Yes        | Local URL, usually `http://localhost:3000`.                                         |
+| `AUTH0_CLIENT_ID`     | OAuth only | Auth0 application client ID.                                                        |
+| `AUTH0_CLIENT_SECRET` | OAuth only | Auth0 application client secret.                                                    |
+| `AUTH0_ISSUER`        | OAuth only | Auth0 issuer URL.                                                                   |
+| `DEBUG_AUTH`          | Local only | Set to `true` to bypass OAuth locally.                                              |
 
 ## Development
 
@@ -96,9 +96,16 @@ docker compose ps
 docker compose logs app sandbox
 ```
 
+CI publishes successful `main` builds to GHCR:
+
+- `ghcr.io/sthwaites/manifest-app:latest`
+- `ghcr.io/sthwaites/manifest-sandbox:latest`
+- `ghcr.io/sthwaites/manifest-app:sha-<short-sha>`
+- `ghcr.io/sthwaites/manifest-sandbox:sha-<short-sha>`
+
 ## CI and Codex Review
 
-GitHub Actions runs linting, typechecking, tests, production builds, and Docker image builds on pull requests and pushes to `main`.
+GitHub Actions runs linting, typechecking, runtime dependency audits, tests, production builds, and Docker image builds on pull requests and pushes to `main`. Pushes to `main` also publish app and sandbox container images to GitHub Container Registry.
 
 The repository also includes an on-demand Codex PR review workflow. Comment `/codex-review` on a pull request, or run the `Codex PR Review` workflow manually, to ask Codex for a focused review of correctness, test coverage, Docker/runtime risk, security, and publication readiness. Configure either `CODEX_API_KEY` or `OPENAI_API_KEY` as a repository secret before using that workflow.
 

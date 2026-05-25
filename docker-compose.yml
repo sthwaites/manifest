@@ -1,5 +1,6 @@
 services:
   app:
+    image: ghcr.io/sthwaites/manifest-app:latest
     build:
       context: .
       args:
@@ -24,13 +25,20 @@ services:
       sandbox:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:3000/api/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 10s
       timeout: 5s
       retries: 12
       start_period: 20s
 
   sandbox:
+    image: ghcr.io/sthwaites/manifest-sandbox:latest
     build: ./sandbox
     ports:
       - "3001:3001"
@@ -38,7 +46,13 @@ services:
       - sandbox_src:/sandbox
       - sandbox_node_modules:/sandbox/node_modules
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:3001').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:3001').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 10s
       timeout: 5s
       retries: 12
