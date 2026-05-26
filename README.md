@@ -51,11 +51,10 @@ For local development without OAuth, set `DEBUG_AUTH=true`.
 
 ## Development
 
-Run the main app and sandbox in separate terminals:
+During active iteration, use the npm runner. It starts the Manifest dev server and the sandbox dev server together without rebuilding Docker images.
 
 ```bash
-npm run dev
-cd sandbox && npm run dev -- --port 3001
+npm run dev:local
 ```
 
 Open:
@@ -64,9 +63,17 @@ Open:
 - Baseline catalogue: `http://localhost:3000/baseline`
 - Sandbox app: `http://localhost:3001`
 
+If you prefer separate terminals, run:
+
+```bash
+npm run dev
+cd sandbox && sh serve-dev.sh
+```
+
 Useful commands:
 
 ```bash
+npm run smoke:local
 npm run verify
 npm run lint
 npm run typecheck
@@ -78,7 +85,7 @@ npm run build
 
 ## Docker
 
-The supported demo path is one locally built Docker container. It runs the production Manifest app, sandbox Next dev server, WebSocket bridge, Codex app-server, SQLite data, and mutable sandbox git working tree in the same filesystem. This avoids split-container file-watch races and stale GHCR images during local testing.
+Docker is the shipping-confidence path, not the fast iteration path. Use it once the npm workflow is stable and you want to prove the production-like container shape. The Docker setup runs the production Manifest app, sandbox Next dev server, WebSocket bridge, Codex app-server, SQLite data, and mutable sandbox git working tree in the same filesystem.
 
 ```bash
 docker compose up --build
@@ -133,9 +140,9 @@ The repository also includes an on-demand Codex PR review workflow. Comment `/co
 ## Troubleshooting
 
 - If `/catalogue` redirects to login during local development, set `DEBUG_AUTH=true`.
-- If the laptop resumes with stale local processes, use `docker compose down` and then `docker compose up --build`.
-- If the catalogue panel says "Sandbox unavailable", check `docker compose ps` and `docker compose logs app`; the sandbox supervisor runs inside the app container and should restart the sandbox automatically.
-- If feature requests show app-server or bridge errors, confirm `OPENAI_API_KEY` or `CODEX_API_KEY` is set and inspect `docker compose logs app`.
+- If the laptop resumes with stale local processes, stop `npm run dev:local` and start it again.
+- If the catalogue panel says "Sandbox unavailable" during npm development, run `npm run smoke:local` and inspect the terminal running `npm run dev:local`.
+- If feature requests show app-server or bridge errors, confirm `OPENAI_API_KEY` or `CODEX_API_KEY` is set and inspect the Manifest terminal output.
 - If reset fails, run `npm run sandbox:init` to recreate the sandbox git repository and `baseline` tag.
 - If generated images do not appear, check `OPENAI_API_KEY`, moderation errors, and write access to `sandbox/public/images/`.
 

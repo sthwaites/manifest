@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --port 3000",
+    "dev:local": "node scripts/start-local-dev.mjs",
     "build": "next build",
     "start": "next start --hostname 0.0.0.0 --port 3000",
     "start:container": "node scripts/start-container.mjs",
@@ -13,6 +14,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit && npm --prefix sandbox run typecheck",
     "test:run": "vitest --run",
+    "smoke:local": "node scripts/smoke-local.mjs",
     "smoke:docker": "node scripts/smoke-docker.mjs",
     "verify": "npm run lint && npm run typecheck && npm run security:audit && npm run test:run && npm run build && npm --prefix sandbox run test:run && npm --prefix sandbox run build",
     "security:audit": "npm audit --omit=dev --audit-level=moderate && npm --prefix sandbox audit --omit=dev --audit-level=moderate"
