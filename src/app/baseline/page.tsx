@@ -1,5 +1,12 @@
 import Link from "next/link"
 
+const previewProducts = [
+  { id: "prod_001", name: "Coffee set" },
+  { id: "prod_002", name: "Wool throw" },
+  { id: "prod_003", name: "Desk organiser" },
+  { id: "prod_004", name: "Cocktail shaker" },
+]
+
 export default function BaselinePage() {
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-50">
@@ -36,10 +43,16 @@ export default function BaselinePage() {
               <span className="rounded border border-emerald-500/40 px-2 py-1 text-xs text-emerald-300">Ready</span>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              {["Coffee set", "Wool throw", "Desk organiser", "Cocktail shaker"].map((item) => (
-                <div key={item} className="rounded-md border border-zinc-800 bg-zinc-900 p-3">
-                  <div className="mb-3 aspect-square rounded bg-zinc-800" />
-                  <p className="text-sm font-medium text-zinc-200">{item}</p>
+              {previewProducts.map((product) => (
+                <div key={product.id} className="rounded-md border border-zinc-800 bg-zinc-900 p-3">
+                  <div className="mb-3 aspect-square overflow-hidden rounded bg-zinc-800">
+                    <img
+                      src={`/_sandbox-images/${product.id}-base.png`}
+                      alt={product.name}
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                  <p className="text-sm font-medium text-zinc-200">{product.name}</p>
                   <p className="mt-1 text-xs text-zinc-500">Awaiting request</p>
                 </div>
               ))}
