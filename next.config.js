@@ -7,6 +7,25 @@ const nextConfig = {
   env: {
     DEBUG_AUTH: process.env.DEBUG_AUTH ?? "false",
   },
+  webpack(config, { dev }) {
+    if (dev) {
+      const existingIgnored = config.watchOptions?.ignored
+      const ignoredGlobs = Array.isArray(existingIgnored)
+        ? existingIgnored.filter((entry) => typeof entry === "string" && entry.length > 0)
+        : typeof existingIgnored === "string" && existingIgnored.length > 0
+          ? [existingIgnored]
+          : []
+      config.watchOptions = {
+        ...config.watchOptions,
+        ignored: [
+          ...ignoredGlobs,
+          "**/.next-dev-*/**",
+          "**/tmp/manifest-next-dev-*/**",
+        ],
+      }
+    }
+    return config
+  },
   async rewrites() {
     return [
       { source: "/sandbox-preview/:path*", destination: `${sandboxInternalUrl}/:path*` },

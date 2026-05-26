@@ -28,5 +28,6 @@ export default defineConfig([
     "sandbox/.next-*/**",
     "sandbox/coverage/**",
     "sandbox/dist/**",
+    "tmp/manifest-next-dev-*/**",
   ]),
 ])

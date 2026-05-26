@@ -8,6 +8,7 @@ sandbox/node_modules/
 .next-*/
 sandbox/.next/
 sandbox/.next-*/
+tmp/manifest-next-dev-*/
 out/
 sandbox/out/
 
