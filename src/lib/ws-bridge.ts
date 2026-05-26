@@ -1,5 +1,6 @@
 import { createServer } from "node:http"
 import { createRequire } from "node:module"
+import { execSync } from "node:child_process"
 import path from "node:path"
 import {
   createThreadStartMessage,
@@ -229,7 +230,7 @@ export async function handleClientMessage(socket: WsSocket, data: string, sandbo
   await persistFeatureRequest(state.persistence, message.text)
   const accepted = sendAppServerMessage(appServer, createTurnStartMessage(state.currentThreadId, message.text, sandboxDir))
   if (accepted) {
-    scheduleActiveRequestTimeout(state, "The agent stopped responding before the request finished.")
+    scheduleActiveRequestTimeout(state, sandboxDir, "The agent stopped responding before the request finished.")
     sendToClient(socket, {
       type: "turn-started",
       message: "Agent accepted the request.",
@@ -283,7 +284,7 @@ async function handleAppServerEvent(event: AppServerEvent, state: BridgeState, s
       state.activeAppServerGeneration = appServer.generation ?? state.activeAppServerGeneration
       const accepted = sendAppServerMessage(appServer, createTurnStartMessage(threadId, nextInput, sandboxDir))
       if (accepted) {
-        scheduleActiveRequestTimeout(state, "The agent stopped responding before the request finished.")
+        scheduleActiveRequestTimeout(state, sandboxDir, "The agent stopped responding before the request finished.")
         eventBus.emit("app-server-event", {
           type: "turn-started",
           message: "Agent accepted the request.",
@@ -300,7 +301,7 @@ async function handleAppServerEvent(event: AppServerEvent, state: BridgeState, s
   }
 
   if (method === "turn-started") {
-    scheduleActiveRequestTimeout(state, "The agent stopped responding before the request finished.")
+    scheduleActiveRequestTimeout(state, sandboxDir, "The agent stopped responding before the request finished.")
     return
   }
 
@@ -321,9 +322,21 @@ function schedulePendingThreadTimeout(state: BridgeState) {
   }, 30_000)
 }
 
-function scheduleActiveRequestTimeout(state: BridgeState, error: string) {
+function scheduleActiveRequestTimeout(state: BridgeState, sandboxDir: string, error: string) {
   if (state.activeRequestTimer) clearTimeout(state.activeRequestTimer)
   state.activeRequestTimer = setTimeout(() => {
+    if (state.persistence.activeFeatureId && hasSandboxChanges(state, sandboxDir)) {
+      eventBus.emit("app-server-event", {
+        method: "turn/completed",
+        params: {
+          threadId: state.currentThreadId,
+          turn: { id: "watchdog", status: "completed" },
+        },
+        warning: "The agent stopped reporting progress after changing files; saved the visible sandbox changes.",
+      })
+      return
+    }
+
     eventBus.emit("app-server-event", {
       type: "bridge-request-timeout",
       error,
@@ -374,6 +387,15 @@ function sendToClient(socket: WsSocket, event: AppServerEvent) {
 function sendAppServerMessage(appServer: { send: (message: unknown) => boolean | void }, message: unknown) {
   try {
     return appServer.send(message) !== false
+  } catch {
+    return false
+  }
+}
+
+function hasSandboxChanges(state: BridgeState, sandboxDir: string) {
+  if (state.persistence.fileChanges.length > 0) return true
+  try {
+    return execSync("git status --porcelain", { cwd: sandboxDir, encoding: "utf8" }).trim().length > 0
   } catch {
     return false
   }

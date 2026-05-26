@@ -7,6 +7,8 @@ const codexServerMock = vi.hoisted(() => ({
   startAppServer: vi.fn(),
 }))
 
+const execSyncMock = vi.hoisted(() => vi.fn())
+
 const persistenceMock = vi.hoisted(() => ({
   createPersistenceState: vi.fn(() => ({
     currentThreadId: null,
@@ -29,6 +31,11 @@ vi.mock("./moderation", () => ({
 vi.mock("./codex-server", () => codexServerMock)
 
 vi.mock("./ws-persistence", () => persistenceMock)
+
+vi.mock("node:child_process", () => ({
+  default: { execSync: execSyncMock },
+  execSync: execSyncMock,
+}))
 
 type TestBridgeState = {
   started: boolean
@@ -57,6 +64,8 @@ describe("ws bridge state reset", () => {
     codexServerMock.createTurnStartMessage.mockClear()
     persistenceMock.persistFeatureRequest.mockReset()
     persistenceMock.persistAppServerEvent.mockReset()
+    execSyncMock.mockReset()
+    vi.useRealTimers()
   })
 
   it("clears stale thread and persistence state after sandbox reset", async () => {
@@ -161,6 +170,31 @@ describe("ws bridge state reset", () => {
       operation: "reset",
     }))
     expect(codexServerMock.startAppServer).not.toHaveBeenCalled()
+  })
+
+  it("synthesizes completion when the watchdog sees sandbox changes", async () => {
+    vi.useFakeTimers()
+    const { checkModeration } = await import("./moderation")
+    vi.mocked(checkModeration).mockResolvedValueOnce(undefined)
+    execSyncMock.mockReturnValue(" M src/app/page.tsx\n")
+    const appServer = { send: vi.fn(() => true), generation: 1 }
+    codexServerMock.startAppServer.mockReturnValueOnce(appServer)
+    const { eventBus } = await import("./event-bus")
+    const { handleClientMessage } = await import("./ws-bridge")
+    const state = createState()
+    state.currentThreadId = "thread_1"
+    state.persistence.currentThreadId = "thread_1"
+    const socket = createSocket()
+    const received = new Promise((resolve) => eventBus.once("app-server-event", resolve))
+
+    await handleClientMessage(socket as never, JSON.stringify({ type: "featureRequest", text: "Add filters" }), "/tmp/sandbox", state)
+    state.persistence.activeFeatureId = "feature_1"
+    vi.advanceTimersByTime(120_000)
+
+    await expect(received).resolves.toMatchObject({
+      method: "turn/completed",
+      warning: "The agent stopped reporting progress after changing files; saved the visible sandbox changes.",
+    })
   })
 })
 

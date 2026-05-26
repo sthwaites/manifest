@@ -20,10 +20,12 @@ export default defineConfig([
   },
   globalIgnores([
     ".next/**",
+    ".next-*/**",
     "coverage/**",
     "dist/**",
     "node_modules/**",
     "sandbox/.next/**",
+    "sandbox/.next-*/**",
     "sandbox/coverage/**",
     "sandbox/dist/**",
   ]),

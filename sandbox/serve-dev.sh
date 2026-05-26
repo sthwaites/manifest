@@ -8,12 +8,14 @@ health_url="http://127.0.0.1:${port}${base_path:-/}"
 restart_marker="${SANDBOX_RESTART_MARKER:-.manifest-restart}"
 clear_cache_marker="${SANDBOX_CLEAR_CACHE_MARKER:-.manifest-clear-cache}"
 bundler="${SANDBOX_NEXT_DEV_BUNDLER:-webpack}"
+dist_dir="${SANDBOX_DIST_DIR:-.next-${port}}"
 failure_count=0
 server_pid=""
 
 start_server() {
+  export SANDBOX_DIST_DIR="$dist_dir"
   if [ -f "$clear_cache_marker" ]; then
-    rm -rf .next
+    rm -rf "$dist_dir"
     rm -f "$clear_cache_marker"
   fi
 

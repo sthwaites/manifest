@@ -41,6 +41,7 @@ async function main() {
         NODE_ENV: "development",
         SANDBOX_BASE_PATH: sandboxBasePath,
         NEXT_PUBLIC_SANDBOX_BASE_PATH: sandboxBasePath,
+        SANDBOX_DIST_DIR: process.env.SANDBOX_DIST_DIR || `.next-${process.env.SANDBOX_PORT || "3001"}`,
         SANDBOX_NEXT_DEV_BUNDLER: process.env.SANDBOX_NEXT_DEV_BUNDLER || "webpack",
       },
       restart: true,
