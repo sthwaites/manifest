@@ -2,7 +2,7 @@ FROM node:20-slim AS builder
 
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV SANDBOX_INTERNAL_URL=http://sandbox:3001
+ENV SANDBOX_INTERNAL_URL=http://localhost:3001
 ARG DEBUG_AUTH=true
 ENV DEBUG_AUTH=${DEBUG_AUTH}
 
@@ -24,7 +24,7 @@ FROM node:20-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV SANDBOX_INTERNAL_URL=http://sandbox:3001
+ENV SANDBOX_INTERNAL_URL=http://localhost:3001
 ENV NEXT_PUBLIC_SANDBOX_PUBLIC_URL=http://localhost:3001
 
 RUN apt-get update \
@@ -39,5 +39,5 @@ RUN cp -a sandbox sandbox-template \
   && npm prune --omit=dev
 
 EXPOSE 3000
-EXPOSE 8080
+EXPOSE 3001
 CMD ["npm", "run", "start:container"]

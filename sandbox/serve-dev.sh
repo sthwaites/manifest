@@ -3,8 +3,7 @@ set -eu
 
 port="${PORT:-3001}"
 host="${BIND_HOST:-0.0.0.0}"
-base_path="${SANDBOX_BASE_PATH:-${NEXT_PUBLIC_SANDBOX_BASE_PATH:-}}"
-health_url="http://127.0.0.1:${port}${base_path:-/}"
+health_url="http://127.0.0.1:${port}/"
 restart_marker="${SANDBOX_RESTART_MARKER:-.manifest-restart}"
 clear_cache_marker="${SANDBOX_CLEAR_CACHE_MARKER:-.manifest-clear-cache}"
 bundler="${SANDBOX_NEXT_DEV_BUNDLER:-webpack}"

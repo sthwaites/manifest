@@ -1,5 +1,4 @@
 import type { Product } from "../data/products"
-import { withSandboxBasePath } from "../lib/paths"
 
 type ProductCardProps = {
   product: Product
@@ -10,7 +9,7 @@ export function ProductCard({ product }: ProductCardProps) {
     <article className="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
       <div className="aspect-square bg-zinc-100">
         {product.image ? (
-          <img src={withSandboxBasePath(product.image)} alt={product.name} className="h-full w-full object-cover" />
+          <img src={product.image} alt={product.name} className="h-full w-full object-cover" />
         ) : (
           <div
             className="flex h-full w-full items-center justify-center bg-gradient-to-br from-zinc-100 via-zinc-200 to-zinc-300 px-4 text-center text-sm font-medium text-zinc-600"
