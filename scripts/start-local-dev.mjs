@@ -12,6 +12,8 @@ function main() {
   spawnManaged("manifest", "npm", ["run", "dev"], {
     env: {
       ...process.env,
+      DEBUG_AUTH: process.env.LOCAL_DEBUG_AUTH || "true",
+      NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET || "manifest-local-dev-secret",
       NEXT_PUBLIC_SANDBOX_PUBLIC_URL: process.env.NEXT_PUBLIC_SANDBOX_PUBLIC_URL || "http://localhost:3001",
       SANDBOX_INTERNAL_URL: process.env.SANDBOX_INTERNAL_URL || "http://localhost:3001",
     },

@@ -51,11 +51,13 @@ For local development without OAuth, set `DEBUG_AUTH=true`.
 
 ## Development
 
-During active iteration, use the npm runner. It starts the Manifest dev server and the sandbox dev server together without rebuilding Docker images.
+During active iteration, use the npm runner. It starts the Manifest dev server and the sandbox dev server together without rebuilding Docker images. It also forces debug auth locally, so `/catalogue` opens without Auth0 while the app is stabilizing.
 
 ```bash
 npm run dev:local
 ```
+
+To temporarily test Auth0 with the npm runner, set `LOCAL_DEBUG_AUTH=false` and provide the Auth0/NextAuth environment variables.
 
 Open:
 
