@@ -23,7 +23,7 @@ function main() {
       ...process.env,
       PORT: process.env.SANDBOX_PORT || "3001",
       BIND_HOST: process.env.SANDBOX_HOST || "0.0.0.0",
-      SANDBOX_NEXT_DEV_BUNDLER: process.env.SANDBOX_NEXT_DEV_BUNDLER || "webpack",
+      SANDBOX_NEXT_DEV_BUNDLER: process.env.SANDBOX_NEXT_DEV_BUNDLER || "default",
       SANDBOX_START_GRACE_SECONDS: process.env.SANDBOX_START_GRACE_SECONDS || "20",
       SANDBOX_HEALTH_INTERVAL_SECONDS: process.env.SANDBOX_HEALTH_INTERVAL_SECONDS || "10",
     },
