@@ -63,6 +63,46 @@ describe("FeatureRequest", () => {
     expect(MockWebSocket.instances[0]?.url).toBe("ws://localhost:3002/api/ws");
   });
 
+  it("keeps the same WebSocket when parent callbacks change after events", () => {
+    const initialOnEvent = vi.fn();
+    const nextOnEvent = vi.fn();
+    const initialOnConnectionChange = vi.fn();
+    const nextOnConnectionChange = vi.fn();
+    const { rerender } = renderFeatureRequest({
+      onEvent: initialOnEvent,
+      onConnectionChange: initialOnConnectionChange,
+    });
+
+    rerender(
+      <FeatureRequest
+        onEvent={nextOnEvent}
+        onConnectionChange={nextOnConnectionChange}
+        threadId={null}
+        events={[{ type: "fileChange", path: "src/app/page.tsx" }]}
+      />,
+    );
+
+    expect(MockWebSocket.instances).toHaveLength(1);
+
+    act(() => {
+      MockWebSocket.instances[0].dispatchEvent(new Event("open"));
+    });
+    expect(initialOnConnectionChange).not.toHaveBeenCalled();
+    expect(nextOnConnectionChange).toHaveBeenCalledWith(true);
+
+    act(() => {
+      MockWebSocket.instances[0].dispatchEvent(
+        new MessageEvent("message", {
+          data: JSON.stringify({ type: "fileChange", path: "src/app/page.tsx" }),
+        }),
+      );
+    });
+    expect(initialOnEvent).not.toHaveBeenCalled();
+    expect(nextOnEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "fileChange" }),
+    );
+  });
+
   it("uses the current origin when localhost is serving through a proxy", () => {
     expect(
       getWebSocketUrl({
@@ -641,6 +681,59 @@ describe("FeatureRequest", () => {
       await screen.findByText("Sandbox reset to baseline"),
     ).toBeInTheDocument();
     expect(onResetComplete).toHaveBeenCalled();
+  });
+
+  it("toggles feature request recording on click and transcribes the result", async () => {
+    const stopTrack = vi.fn();
+    const mediaRecorderInstances: Array<{
+      start: ReturnType<typeof vi.fn>;
+      stop: ReturnType<typeof vi.fn>;
+    }> = [];
+    class MockMediaRecorder extends EventTarget {
+      start = vi.fn();
+      stop = vi.fn(() => {
+        this.dispatchEvent(
+          Object.assign(new Event("dataavailable"), {
+            data: new Blob(["audio"], { type: "audio/webm" }),
+          }),
+        );
+        this.dispatchEvent(new Event("stop"));
+      });
+
+      constructor() {
+        super();
+        mediaRecorderInstances.push(this);
+      }
+    }
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: {
+        getUserMedia: vi
+          .fn()
+          .mockResolvedValue({ getTracks: () => [{ stop: stopTrack }] }),
+      },
+    });
+    vi.stubGlobal("MediaRecorder", MockMediaRecorder);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ text: "Add filters" }) }),
+    );
+
+    renderFeatureRequest();
+
+    const micButton = await screen.findByRole("button", {
+      name: "Record feature request",
+    });
+    await userEvent.click(micButton);
+    await screen.findByPlaceholderText("Listening...");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Stop recording feature request" }),
+    );
+
+    expect(mediaRecorderInstances[0].start).toHaveBeenCalled();
+    expect(mediaRecorderInstances[0].stop).toHaveBeenCalled();
+    expect(stopTrack).toHaveBeenCalled();
+    expect(await screen.findByDisplayValue("Add filters")).toBeInTheDocument();
   });
 
   it("enables rollback from a recovered persisted thread after refresh", async () => {

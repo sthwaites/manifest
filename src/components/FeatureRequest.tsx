@@ -77,6 +77,8 @@ export function FeatureRequest({
   );
   const suppressNextCloseRef = useRef(false);
   const submittingRef = useRef(false);
+  const onEventRef = useRef(onEvent);
+  const onConnectionChangeRef = useRef(onConnectionChange);
   const hasCompletedTurn = events.some(
     (event) => (event.method ?? event.type) === "turn/completed",
   );
@@ -88,6 +90,14 @@ export function FeatureRequest({
   useEffect(() => {
     submittingRef.current = submitting;
   }, [submitting]);
+
+  useEffect(() => {
+    onEventRef.current = onEvent;
+  }, [onEvent]);
+
+  useEffect(() => {
+    onConnectionChangeRef.current = onConnectionChange;
+  }, [onConnectionChange]);
 
   const clearRequestTimers = useCallback(() => {
     if (threadStartTimerRef.current) clearTimeout(threadStartTimerRef.current);
@@ -152,11 +162,11 @@ export function FeatureRequest({
       socketRef.current = nextSocket;
       nextSocket.addEventListener("open", () => {
         setConnectionState("connected");
-        onConnectionChange?.(true);
+        onConnectionChangeRef.current?.(true);
       });
       nextSocket.addEventListener("close", () => {
         setConnectionState("disconnected");
-        onConnectionChange?.(false);
+        onConnectionChangeRef.current?.(false);
         if (suppressNextCloseRef.current) {
           suppressNextCloseRef.current = false;
           return;
@@ -170,7 +180,7 @@ export function FeatureRequest({
       });
       nextSocket.addEventListener("error", () => {
         setConnectionState("disconnected");
-        onConnectionChange?.(false);
+        onConnectionChangeRef.current?.(false);
         if (lastSubmittedPromptRef.current && submittingRef.current) {
           failRequest(
             "Connection lost before the request finished. Reconnect and send again.",
@@ -240,7 +250,7 @@ export function FeatureRequest({
           }
           setProgress((current) => nextProgress(current, event));
         }
-        onEvent(event);
+        onEventRef.current(event);
       });
       return nextSocket;
     }
@@ -255,8 +265,6 @@ export function FeatureRequest({
     clearRequestTimers,
     connectionAttempt,
     failRequest,
-    onConnectionChange,
-    onEvent,
     startAgentTimeout,
   ]);
 
@@ -393,6 +401,14 @@ export function FeatureRequest({
     recorderRef.current?.stop();
   }
 
+  function toggleRecording() {
+    if (recording) {
+      stopRecording();
+      return;
+    }
+    void startRecording();
+  }
+
   async function transcribeRecording() {
     const blob = new Blob(chunksRef.current, { type: "audio/webm" });
     if (blob.size === 0) return;
@@ -458,16 +474,15 @@ export function FeatureRequest({
             {supportsRecording ? (
               <button
                 type="button"
-                aria-label="Record feature request"
-                onMouseDown={startRecording}
-                onMouseUp={stopRecording}
-                onTouchStart={startRecording}
-                onTouchEnd={stopRecording}
+                aria-label={recording ? "Stop recording feature request" : "Record feature request"}
+                aria-pressed={recording}
+                onClick={toggleRecording}
+                disabled={transcribing}
                 className={`grid size-10 place-items-center rounded-md border border-zinc-700 transition ${
                   recording
                     ? "animate-pulse border-rose-500 text-rose-500"
                     : "text-zinc-400 hover:text-zinc-200"
-                }`}
+                } disabled:opacity-50`}
               >
                 <Mic className="size-4" />
               </button>
