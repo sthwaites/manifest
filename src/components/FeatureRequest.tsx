@@ -10,6 +10,8 @@ type FeatureRequestProps = {
   threadId: string | null;
   rollbackThreadId?: string | null;
   events: AgentEvent[];
+  onSandboxTransitionStart?: (message: string) => void;
+  onSandboxTransitionEnd?: () => void;
   onRollbackComplete?: () => void;
   onResetComplete?: () => void;
 };
@@ -36,6 +38,8 @@ export function FeatureRequest({
   threadId,
   rollbackThreadId = null,
   events,
+  onSandboxTransitionStart,
+  onSandboxTransitionEnd,
   onRollbackComplete,
   onResetComplete,
 }: FeatureRequestProps) {
@@ -315,40 +319,50 @@ export function FeatureRequest({
     if (!effectiveRollbackThreadId) return;
     setToast(null);
     setError(null);
-    const response = await fetch("/api/rollback", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ threadId: effectiveRollbackThreadId }),
-    });
-    const payload = (await response.json()) as {
-      message?: string;
-      error?: string;
-    };
-    if (!response.ok) {
-      setError(payload.error ?? "Rollback failed");
-      return;
+    onSandboxTransitionStart?.("Restoring previous sandbox state.");
+    try {
+      const response = await fetch("/api/rollback", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ threadId: effectiveRollbackThreadId }),
+      });
+      const payload = (await response.json()) as {
+        message?: string;
+        error?: string;
+      };
+      if (!response.ok) {
+        setError(payload.error ?? "Rollback failed");
+        return;
+      }
+      setToast(payload.message ?? "Rolled back to previous state");
+      onRollbackComplete?.();
+    } finally {
+      onSandboxTransitionEnd?.();
     }
-    setToast(payload.message ?? "Rolled back to previous state");
-    onRollbackComplete?.();
   }
 
   async function reset() {
     setToast(null);
     setError(null);
-    const response = await fetch("/api/reset", { method: "POST" });
-    const payload = (await response.json()) as {
-      message?: string;
-      error?: string;
-    };
-    if (!response.ok) {
-      setError(payload.error ?? "Reset failed");
-      return;
+    onSandboxTransitionStart?.("Resetting sandbox baseline.");
+    try {
+      const response = await fetch("/api/reset", { method: "POST" });
+      const payload = (await response.json()) as {
+        message?: string;
+        error?: string;
+      };
+      if (!response.ok) {
+        setError(payload.error ?? "Reset failed");
+        return;
+      }
+      setToast(payload.message ?? "Sandbox reset to baseline");
+      setConfirmingReset(false);
+      lastSubmittedPromptRef.current = null;
+      resetRequestState();
+      onResetComplete?.();
+    } finally {
+      onSandboxTransitionEnd?.();
     }
-    setToast(payload.message ?? "Sandbox reset to baseline");
-    setConfirmingReset(false);
-    lastSubmittedPromptRef.current = null;
-    resetRequestState();
-    onResetComplete?.();
   }
 
   async function startRecording() {

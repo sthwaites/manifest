@@ -15,10 +15,12 @@ type Thread = {
 
 type ThreadHistoryProps = {
   onRollbackComplete: () => void
+  onRollbackStart?: () => void
+  onRollbackEnd?: () => void
   refreshToken?: number
 }
 
-export function ThreadHistory({ onRollbackComplete, refreshToken = 0 }: ThreadHistoryProps) {
+export function ThreadHistory({ onRollbackComplete, onRollbackStart, onRollbackEnd, refreshToken = 0 }: ThreadHistoryProps) {
   const [threads, setThreads] = useState<Thread[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -41,6 +43,7 @@ export function ThreadHistory({ onRollbackComplete, refreshToken = 0 }: ThreadHi
 
   async function rollback(thread: Thread) {
     setRollingBackId(thread.id)
+    onRollbackStart?.()
     try {
       const response = await fetch("/api/rollback", {
         method: "POST",
@@ -54,6 +57,7 @@ export function ThreadHistory({ onRollbackComplete, refreshToken = 0 }: ThreadHi
       setError(err instanceof Error ? err.message : "Rollback failed")
     } finally {
       setRollingBackId(null)
+      onRollbackEnd?.()
     }
   }
 

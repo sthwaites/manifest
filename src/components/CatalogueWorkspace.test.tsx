@@ -100,6 +100,37 @@ describe("CatalogueWorkspace", () => {
     )
   })
 
+  it("shows a holding overlay while rollback is in progress", async () => {
+    let resolveRollback: (value: Response) => void = () => {}
+    const rollbackResponse = new Promise<Response>((resolve) => {
+      resolveRollback = resolve
+    })
+    const fetchMock = createFetchMock("ok", {
+      threads: [{ id: "thread_recovered", features: [{ id: "feature_1", status: "applied" }], _count: { features: 1 } }],
+    })
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      if (String(input) === "/api/rollback") return rollbackResponse
+      return createFetchMock("ok", {
+        threads: [{ id: "thread_recovered", features: [{ id: "feature_1", status: "applied" }], _count: { features: 1 } }],
+      })(input)
+    })
+    vi.mocked(fetch).mockImplementation(fetchMock)
+    render(<CatalogueWorkspace userName="Ada Lovelace" userEmail="ada@example.com" logoutAction={vi.fn()} />)
+
+    await screen.findByText("1 feature")
+    await userEvent.click(screen.getByRole("button", { name: "Undo last change" }))
+
+    expect(screen.getByText("Updating sandbox")).toBeInTheDocument()
+    expect(screen.getByText("Restoring previous sandbox state.")).toBeInTheDocument()
+
+    resolveRollback({
+      ok: true,
+      json: async () => ({ message: "Rolled back to previous state" }),
+    } as Response)
+
+    expect(await screen.findByText("Restored")).toBeInTheDocument()
+  })
+
   it("shows the signed-in user menu with logout in normal auth mode", async () => {
     render(<CatalogueWorkspace userName="Ada Lovelace" userEmail="ada@example.com" logoutAction={vi.fn()} />)
 

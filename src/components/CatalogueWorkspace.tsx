@@ -45,6 +45,7 @@ export function CatalogueWorkspace({ userName = null, userEmail = null, debugAut
   const [sandboxReloadToken, setSandboxReloadToken] = useState(0)
   const [threadRefreshToken, setThreadRefreshToken] = useState(0)
   const [rollbackThreadId, setRollbackThreadId] = useState<string | null>(null)
+  const [sandboxTransition, setSandboxTransition] = useState<string | null>(null)
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const currentThreadId = findCurrentThreadId(events)
   const displayName = userName || userEmail || "Signed in"
@@ -140,6 +141,14 @@ export function CatalogueWorkspace({ userName = null, userEmail = null, debugAut
     void checkSandboxHealth()
     window.setTimeout(() => setFlash(null), 400)
   }, [checkSandboxHealth, loadRollbackTarget])
+
+  const beginSandboxTransition = useCallback((message: string) => {
+    setSandboxTransition(message)
+  }, [])
+
+  const endSandboxTransition = useCallback(() => {
+    window.setTimeout(() => setSandboxTransition(null), 900)
+  }, [])
 
   const refreshSandbox = useCallback(() => {
     setSandboxReloadToken(Date.now())
@@ -259,7 +268,19 @@ export function CatalogueWorkspace({ userName = null, userEmail = null, debugAut
             } ${flash === "rollback" ? "ring-2 ring-inset ring-orange-500 ring-pulse-orange" : ""}`}
           >
             <iframe ref={iframeRef} title="Sandbox catalogue" src={sandboxFrameUrl} className="h-full min-h-[560px] w-full bg-white lg:min-h-0" />
-            {sandboxHealth.status === "unavailable" ? (
+            {sandboxTransition ? (
+              <div className="absolute inset-0 grid place-items-center bg-zinc-950/80 px-6 text-center text-zinc-100 backdrop-blur-sm">
+                <div className="max-w-md space-y-3">
+                  <div className="mx-auto grid size-10 place-items-center rounded-md border border-indigo-400/50 bg-indigo-400/10 text-indigo-300">
+                    <RefreshCw className="size-5 animate-spin" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold">Updating sandbox</h3>
+                    <p className="mt-1 text-sm leading-6 text-zinc-300">{sandboxTransition}</p>
+                  </div>
+                </div>
+              </div>
+            ) : sandboxHealth.status === "unavailable" ? (
               <div className="absolute inset-0 grid place-items-center bg-zinc-950/85 px-6 text-center text-zinc-100">
                 <div className="max-w-md space-y-3">
                   <div className="mx-auto grid size-10 place-items-center rounded-md border border-amber-400/50 bg-amber-400/10 text-amber-300">
@@ -298,6 +319,8 @@ export function CatalogueWorkspace({ userName = null, userEmail = null, debugAut
               threadId={currentThreadId}
               rollbackThreadId={rollbackThreadId}
               events={events}
+              onSandboxTransitionStart={beginSandboxTransition}
+              onSandboxTransitionEnd={endSandboxTransition}
               onRollbackComplete={handleRollbackComplete}
               onResetComplete={handleRollbackComplete}
             />
@@ -305,7 +328,12 @@ export function CatalogueWorkspace({ userName = null, userEmail = null, debugAut
 
           <ImageStudio products={seedProducts} sandboxWindow={iframeRef.current?.contentWindow ?? null} />
 
-          <ThreadHistory onRollbackComplete={handleRollbackComplete} refreshToken={threadRefreshToken} />
+          <ThreadHistory
+            onRollbackStart={() => beginSandboxTransition("Restoring previous sandbox state.")}
+            onRollbackEnd={endSandboxTransition}
+            onRollbackComplete={handleRollbackComplete}
+            refreshToken={threadRefreshToken}
+          />
         </aside>
       </div>
 
