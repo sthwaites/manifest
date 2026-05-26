@@ -94,13 +94,14 @@ describe("/api/rollback", () => {
     await expect(response.json()).resolves.toEqual({ message: "Rolled back to previous state" })
   })
 
-  it("uses HEAD~1 when the sandbox is clean and ahead of baseline", async () => {
+  it("uses the matching thread commit when the sandbox is clean", async () => {
     mocks.auth.mockResolvedValue({ user: { id: "user_1" } })
     mocks.prisma.feature.updateMany.mockResolvedValue({ count: 1 })
     mocks.execSync.mockImplementation((command: string) => {
       if (command === "git status --porcelain") return ""
       if (command === "git rev-parse HEAD") return "commit_2\n"
       if (command === "git rev-parse baseline") return "commit_1\n"
+      if (command === "git log --grep='thread:thread_1' -n 1 --format=%H") return "commit_2\n"
       return ""
     })
     const { POST } = await import("./route")
@@ -113,7 +114,7 @@ describe("/api/rollback", () => {
     )
 
     expect(response.status).toBe(200)
-    expect(mocks.execSync).toHaveBeenCalledWith("git reset --hard HEAD~1", expect.objectContaining({ cwd: expect.stringContaining("sandbox") }))
+    expect(mocks.execSync).toHaveBeenCalledWith("git reset --hard commit_2^", expect.objectContaining({ cwd: expect.stringContaining("sandbox") }))
     expect(mocks.prisma.feature.updateMany).toHaveBeenCalledWith({
       where: { threadId: "thread_1", status: { in: ["pending", "applied"] } },
       data: { status: "rolled_back" },
@@ -143,20 +144,18 @@ describe("/api/rollback", () => {
     expect(mocks.execSync).not.toHaveBeenCalledWith("git reset --hard HEAD", expect.anything())
     expect(mocks.execSync).not.toHaveBeenCalledWith("git reset --hard HEAD~1", expect.anything())
     expect(mocks.send).not.toHaveBeenCalled()
-    expect(mocks.prisma.feature.updateMany).toHaveBeenCalledWith({
-      where: { threadId: "thread_1", status: { in: ["pending", "applied"] } },
-      data: { status: "rolled_back" },
-    })
+    expect(mocks.prisma.feature.updateMany).not.toHaveBeenCalled()
     await expect(response.json()).resolves.toEqual({ message: "No sandbox changes to roll back" })
   })
 
-  it("marks thread features rolled back when the sandbox is clean but not ahead of baseline", async () => {
+  it("does not mark features rolled back when no matching sandbox rollback happened", async () => {
     mocks.auth.mockResolvedValue({ user: { id: "user_1" } })
     mocks.prisma.feature.updateMany.mockResolvedValue({ count: 1 })
     mocks.execSync.mockImplementation((command: string) => {
       if (command === "git status --porcelain") return ""
       if (command === "git rev-parse HEAD") return "commit_1\n"
       if (command === "git rev-parse baseline") return "commit_2\n"
+      if (command === "git log --grep='thread:thread_1' -n 1 --format=%H") return ""
       if (command === "git merge-base --is-ancestor baseline HEAD") throw new Error("not ahead")
       return ""
     })
@@ -171,10 +170,7 @@ describe("/api/rollback", () => {
 
     expect(response.status).toBe(200)
     expect(mocks.execSync).not.toHaveBeenCalledWith("git reset --hard HEAD~1", expect.anything())
-    expect(mocks.prisma.feature.updateMany).toHaveBeenCalledWith({
-      where: { threadId: "thread_1", status: { in: ["pending", "applied"] } },
-      data: { status: "rolled_back" },
-    })
+    expect(mocks.prisma.feature.updateMany).not.toHaveBeenCalled()
     await expect(response.json()).resolves.toEqual({ message: "No sandbox changes to roll back" })
   })
 
