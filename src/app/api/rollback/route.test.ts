@@ -68,11 +68,14 @@ describe("/api/rollback", () => {
     expect(response.status).toBe(401)
   })
 
-  it("uses HEAD when the sandbox working tree is dirty", async () => {
+  it("cleans a dirty working tree before rolling back the matching thread commit", async () => {
     mocks.auth.mockResolvedValue({ user: { id: "user_1" } })
     mocks.prisma.feature.updateMany.mockResolvedValue({ count: 1 })
     mocks.execSync.mockImplementation((command: string) => {
       if (command === "git status --porcelain") return " M src/app/globals.css\n"
+      if (command === "git rev-parse HEAD") return "commit_2\n"
+      if (command === "git rev-parse baseline") return "commit_1\n"
+      if (command === "git log --grep='thread:thread_1' -n 1 --format=%H") return "commit_2\n"
       return ""
     })
     const { POST } = await import("./route")
@@ -87,6 +90,7 @@ describe("/api/rollback", () => {
     expect(response.status).toBe(200)
     expect(mocks.send).toHaveBeenCalledWith(expect.objectContaining({ method: "thread/rollback" }))
     expect(mocks.execSync).toHaveBeenCalledWith("git reset --hard HEAD", expect.objectContaining({ cwd: expect.stringContaining("sandbox") }))
+    expect(mocks.execSync).toHaveBeenCalledWith("git reset --hard commit_2^", expect.objectContaining({ cwd: expect.stringContaining("sandbox") }))
     expect(mocks.prisma.feature.updateMany).toHaveBeenCalledWith({
       where: { threadId: "thread_1", status: { in: ["pending", "applied"] } },
       data: { status: "rolled_back" },

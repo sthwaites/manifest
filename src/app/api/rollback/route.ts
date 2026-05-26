@@ -48,24 +48,23 @@ export async function POST(req: Request) {
   try {
     const status = gitOutput("git status --porcelain", sandboxDir)
 
-    // Codex can leave uncommitted file edits before a turn is committed; discard those before moving history.
+    // Codex and Next dev can leave uncommitted edits; clean them before moving history.
     if (status.length > 0) {
       execSync("git reset --hard HEAD", { cwd: sandboxDir })
-      rolledBack = true
-    } else {
-      const head = gitOutput("git rev-parse HEAD", sandboxDir)
-      const baseline = gitOutput("git rev-parse baseline", sandboxDir)
+    }
 
-      if (body.threadId) {
-        const threadCommit = gitOutput(`git log --grep=${shellQuote(`thread:${body.threadId}`)} -n 1 --format=%H`, sandboxDir)
-        if (threadCommit && gitSucceeds(`git merge-base --is-ancestor ${threadCommit} HEAD`, sandboxDir)) {
-          execSync(`git reset --hard ${threadCommit}^`, { cwd: sandboxDir })
-          rolledBack = true
-        }
-      } else if (head !== baseline && gitSucceeds("git merge-base --is-ancestor baseline HEAD", sandboxDir)) {
-        execSync("git reset --hard HEAD~1", { cwd: sandboxDir })
+    const head = gitOutput("git rev-parse HEAD", sandboxDir)
+    const baseline = gitOutput("git rev-parse baseline", sandboxDir)
+
+    if (body.threadId) {
+      const threadCommit = gitOutput(`git log --grep=${shellQuote(`thread:${body.threadId}`)} -n 1 --format=%H`, sandboxDir)
+      if (threadCommit && gitSucceeds(`git merge-base --is-ancestor ${threadCommit} HEAD`, sandboxDir)) {
+        execSync(`git reset --hard ${threadCommit}^`, { cwd: sandboxDir })
         rolledBack = true
       }
+    } else if (head !== baseline && gitSucceeds("git merge-base --is-ancestor baseline HEAD", sandboxDir)) {
+      execSync("git reset --hard HEAD~1", { cwd: sandboxDir })
+      rolledBack = true
     }
   } catch (error) {
     endBridgeOperation("rollback")
