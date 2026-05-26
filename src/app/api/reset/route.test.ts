@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   endBridgeOperation: vi.fn(),
   restart: vi.fn(),
   requestSandboxRestart: vi.fn(),
+  featureUpdateMany: vi.fn(),
 }))
 
 vi.mock("@/lib/auth", () => ({
@@ -28,6 +29,14 @@ vi.mock("@/lib/sandbox-runtime", () => ({
   requestSandboxRestart: mocks.requestSandboxRestart,
 }))
 
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    feature: {
+      updateMany: mocks.featureUpdateMany,
+    },
+  },
+}))
+
 vi.mock("child_process", () => ({
   default: { execSync: mocks.execSync },
   execSync: mocks.execSync,
@@ -44,6 +53,7 @@ describe("/api/reset", () => {
     mocks.resetBridge.mockReset()
     mocks.restart.mockReset()
     mocks.execSync.mockReset()
+    mocks.featureUpdateMany.mockReset()
   })
 
   it("returns 401 without a session", async () => {
@@ -64,6 +74,11 @@ describe("/api/reset", () => {
     expect(response.status).toBe(200)
     expect(mocks.execSync).toHaveBeenCalledWith("git reset --hard baseline", expect.objectContaining({ cwd: expect.stringContaining("sandbox") }))
     expect(mocks.execSync).toHaveBeenCalledWith("git clean -fd", expect.objectContaining({ cwd: expect.stringContaining("sandbox") }))
+    expect(mocks.execSync).toHaveBeenCalledWith("git clean -fdX public/images", expect.objectContaining({ cwd: expect.stringContaining("sandbox") }))
+    expect(mocks.featureUpdateMany).toHaveBeenCalledWith({
+      where: { status: { in: ["pending", "applied"] } },
+      data: { status: "rolled_back" },
+    })
     expect(mocks.resetBridge).toHaveBeenCalled()
     expect(mocks.restart).toHaveBeenCalledWith(expect.stringContaining("sandbox"))
     expect(mocks.requestSandboxRestart).toHaveBeenCalledWith(expect.stringContaining("sandbox"), { clearCache: true })

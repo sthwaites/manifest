@@ -32,10 +32,13 @@ export function CatalogueWorkspace({ userName = null, userEmail = null, debugAut
   })
   const [agentProgressOpen, setAgentProgressOpen] = useState(false)
   const [identityOpen, setIdentityOpen] = useState(false)
+  const [sandboxReloadToken, setSandboxReloadToken] = useState(0)
+  const [threadRefreshToken, setThreadRefreshToken] = useState(0)
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const currentThreadId = findCurrentThreadId(events)
   const displayName = userName || userEmail || "Signed in"
   const displayEmail = userEmail && userEmail !== displayName ? userEmail : null
+  const sandboxFrameUrl = cacheBustUrl(sandboxUrl, sandboxReloadToken)
 
   const checkSandboxHealth = useCallback(async () => {
     setSandboxHealth({ status: "checking", message: "Checking sandbox." })
@@ -75,9 +78,7 @@ export function CatalogueWorkspace({ userName = null, userEmail = null, debugAut
 
   useEffect(() => {
     if (sandboxHealth.status !== "online") return
-    if (iframeRef.current) {
-      iframeRef.current.src = iframeRef.current.src
-    }
+    setSandboxReloadToken(Date.now())
   }, [sandboxHealth.status])
 
   const appendEvent = useCallback((event: AgentEvent) => {
@@ -91,10 +92,8 @@ export function CatalogueWorkspace({ userName = null, userEmail = null, debugAut
 
     if (eventType === "turn/completed") {
       window.setTimeout(() => {
-        if (iframeRef.current) {
-          // Next dev HMR can miss file changes from the agent process; reload the iframe after a completed turn.
-          iframeRef.current.src = iframeRef.current.src
-        }
+        // Next dev HMR can miss file changes from the agent process; reload the iframe after a completed turn.
+        setSandboxReloadToken(Date.now())
         setFlash("hot")
         window.setTimeout(() => setFlash(null), 400)
       }, 1500)
@@ -104,17 +103,14 @@ export function CatalogueWorkspace({ userName = null, userEmail = null, debugAut
   const handleRollbackComplete = useCallback(() => {
     setEvents([])
     setFlash("rollback")
-    if (iframeRef.current) {
-      iframeRef.current.src = iframeRef.current.src
-    }
+    setSandboxReloadToken(Date.now())
+    setThreadRefreshToken((token) => token + 1)
     void checkSandboxHealth()
     window.setTimeout(() => setFlash(null), 400)
   }, [checkSandboxHealth])
 
   const refreshSandbox = useCallback(() => {
-    if (iframeRef.current) {
-      iframeRef.current.src = iframeRef.current.src
-    }
+    setSandboxReloadToken(Date.now())
     void checkSandboxHealth()
     setFlash("hot")
     window.setTimeout(() => setFlash(null), 400)
@@ -230,7 +226,7 @@ export function CatalogueWorkspace({ userName = null, userEmail = null, debugAut
               flash === "hot" ? "ring-2 ring-inset ring-amber-400 ring-pulse-amber" : ""
             } ${flash === "rollback" ? "ring-2 ring-inset ring-orange-500 ring-pulse-orange" : ""}`}
           >
-            <iframe ref={iframeRef} title="Sandbox catalogue" src={sandboxUrl} className="h-full min-h-[560px] w-full bg-white lg:min-h-0" />
+            <iframe ref={iframeRef} title="Sandbox catalogue" src={sandboxFrameUrl} className="h-full min-h-[560px] w-full bg-white lg:min-h-0" />
             {sandboxHealth.status === "unavailable" ? (
               <div className="absolute inset-0 grid place-items-center bg-zinc-950/85 px-6 text-center text-zinc-100">
                 <div className="max-w-md space-y-3">
@@ -276,7 +272,7 @@ export function CatalogueWorkspace({ userName = null, userEmail = null, debugAut
 
           <ImageStudio products={seedProducts} sandboxWindow={iframeRef.current?.contentWindow ?? null} />
 
-          <ThreadHistory onRollbackComplete={handleRollbackComplete} />
+          <ThreadHistory onRollbackComplete={handleRollbackComplete} refreshToken={threadRefreshToken} />
 
           <DebugPanel threadId={currentThreadId} events={events} />
 
@@ -349,4 +345,17 @@ function readNestedString(source: object, objectKey: string, valueKey: string) {
 
 function initialFor(value: string) {
   return value.trim().charAt(0).toUpperCase() || "U"
+}
+
+function cacheBustUrl(url: string, token: number) {
+  try {
+    const base = typeof window === "undefined" ? "http://localhost" : window.location.href
+    const parsed = new URL(url, base)
+    parsed.searchParams.set("__manifest_reload", String(token))
+    if (url.startsWith("/")) return `${parsed.pathname}${parsed.search}${parsed.hash}`
+    return parsed.toString()
+  } catch {
+    const separator = url.includes("?") ? "&" : "?"
+    return `${url}${separator}__manifest_reload=${token}`
+  }
 }

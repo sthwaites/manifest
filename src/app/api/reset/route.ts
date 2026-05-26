@@ -2,6 +2,7 @@ import { execSync } from "child_process"
 import path from "node:path"
 import { auth } from "@/lib/auth"
 import { restartAppServer } from "@/lib/codex-server"
+import { prisma } from "@/lib/prisma"
 import { requestSandboxRestart } from "@/lib/sandbox-runtime"
 import { beginBridgeOperation, endBridgeOperation, resetWebSocketBridgeState } from "@/lib/ws-bridge"
 
@@ -25,6 +26,11 @@ export async function POST() {
     // Reset restores the catalogue source and removes untracked files created during agent runs.
     execSync("git reset --hard baseline", { cwd: sandboxDir })
     execSync("git clean -fd", { cwd: sandboxDir })
+    execSync("git clean -fdX public/images", { cwd: sandboxDir })
+    await prisma.feature.updateMany({
+      where: { status: { in: ["pending", "applied"] } },
+      data: { status: "rolled_back" },
+    })
     resetWebSocketBridgeState()
     restartAppServer(sandboxDir)
     await requestSandboxRestart(sandboxDir, { clearCache: true })

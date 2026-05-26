@@ -15,9 +15,10 @@ type Thread = {
 
 type ThreadHistoryProps = {
   onRollbackComplete: () => void
+  refreshToken?: number
 }
 
-export function ThreadHistory({ onRollbackComplete }: ThreadHistoryProps) {
+export function ThreadHistory({ onRollbackComplete, refreshToken = 0 }: ThreadHistoryProps) {
   const [threads, setThreads] = useState<Thread[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -58,7 +59,7 @@ export function ThreadHistory({ onRollbackComplete }: ThreadHistoryProps) {
 
   useEffect(() => {
     void loadThreads()
-  }, [])
+  }, [refreshToken])
 
   return (
     <aside className="rounded-lg border border-zinc-800 bg-zinc-900 p-4">

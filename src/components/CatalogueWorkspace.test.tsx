@@ -22,7 +22,7 @@ describe("CatalogueWorkspace", () => {
 
     expect(screen.getByRole("heading", { name: "Manifest" })).toBeInTheDocument()
     expect(screen.getByText("cockpit")).toBeInTheDocument()
-    expect(screen.getByTitle("Sandbox catalogue")).toHaveAttribute("src", "http://localhost:3001/")
+    expect(screen.getByTitle("Sandbox catalogue").getAttribute("src")).toMatch(/^http:\/\/localhost:3001\/\?__manifest_reload=\d+$/)
     expect(screen.getByText("Live sandbox")).toBeInTheDocument()
     expect(await screen.findByText("Catalogue online")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Refresh sandbox" })).toBeInTheDocument()
