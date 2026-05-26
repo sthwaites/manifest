@@ -10,6 +10,7 @@ main()
 function main() {
   loadEnvConfig(process.cwd())
 
+  run("npx", ["prisma", "migrate", "deploy"])
   run("npx", ["prisma", "generate"])
   run("npm", ["run", "sandbox:init"])
 
