@@ -642,6 +642,43 @@ describe("FeatureRequest", () => {
     ).toBeInTheDocument();
     expect(onResetComplete).toHaveBeenCalled();
   });
+
+  it("enables rollback from a recovered persisted thread after refresh", async () => {
+    const onRollbackComplete = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(jsonResponse({ message: "Rolled back to previous state" })),
+    );
+
+    renderFeatureRequest({
+      rollbackThreadId: "thread_recovered",
+      events: [],
+      onRollbackComplete,
+    });
+
+    expect(
+      screen.getByRole("button", { name: "Undo last change" }),
+    ).not.toBeDisabled();
+
+    await userEvent.click(screen.getByRole("button", { name: "Undo last change" }));
+
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/rollback",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ threadId: "thread_recovered" }),
+      }),
+    );
+    expect(onRollbackComplete).toHaveBeenCalled();
+  });
+
+  it("keeps rollback disabled when there is no completed or recovered change", () => {
+    renderFeatureRequest({ events: [], threadId: null, rollbackThreadId: null });
+
+    expect(
+      screen.getByRole("button", { name: "Undo last change" }),
+    ).toBeDisabled();
+  });
 });
 
 function jsonResponse(body: unknown) {

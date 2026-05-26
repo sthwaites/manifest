@@ -8,6 +8,7 @@ type FeatureRequestProps = {
   onEvent: (event: AgentEvent) => void;
   onConnectionChange?: (connected: boolean) => void;
   threadId: string | null;
+  rollbackThreadId?: string | null;
   events: AgentEvent[];
   onRollbackComplete?: () => void;
   onResetComplete?: () => void;
@@ -33,6 +34,7 @@ export function FeatureRequest({
   onEvent,
   onConnectionChange,
   threadId,
+  rollbackThreadId = null,
   events,
   onRollbackComplete,
   onResetComplete,
@@ -74,6 +76,8 @@ export function FeatureRequest({
   const hasCompletedTurn = events.some(
     (event) => (event.method ?? event.type) === "turn/completed",
   );
+  const effectiveRollbackThreadId = threadId ?? rollbackThreadId;
+  const canRollback = Boolean((threadId && hasCompletedTurn) || rollbackThreadId);
   const showConnectionBanner =
     connectionState !== "connected" || requestFailure !== null;
 
@@ -308,13 +312,13 @@ export function FeatureRequest({
   }
 
   async function rollback() {
-    if (!threadId) return;
+    if (!effectiveRollbackThreadId) return;
     setToast(null);
     setError(null);
     const response = await fetch("/api/rollback", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ threadId }),
+      body: JSON.stringify({ threadId: effectiveRollbackThreadId }),
     });
     const payload = (await response.json()) as {
       message?: string;
@@ -484,7 +488,7 @@ export function FeatureRequest({
         <button
           type="button"
           onClick={() => void rollback()}
-          disabled={!hasCompletedTurn || !threadId}
+          disabled={!canRollback}
           className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-orange-500/40 px-3 text-xs font-medium text-orange-300 transition hover:border-orange-400 hover:text-orange-200 disabled:border-zinc-800 disabled:text-zinc-600 disabled:opacity-70"
         >
           <Undo2 className="size-3.5" />

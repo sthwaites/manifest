@@ -24,7 +24,7 @@ export async function GET() {
     include: {
       features: {
         where: { status: { in: activeFeatureStatuses } },
-        select: { id: true },
+        select: { id: true, status: true },
       },
     },
   })
@@ -32,6 +32,7 @@ export async function GET() {
   return Response.json({
     threads: threads.map(({ features, ...thread }) => ({
       ...thread,
+      features,
       _count: { features: features.length },
     })),
   })

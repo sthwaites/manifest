@@ -74,9 +74,30 @@ describe("CatalogueWorkspace", () => {
 
     expect(diagnostics).toHaveAttribute("aria-expanded", "true")
     expect(screen.getByRole("heading", { name: "Agent progress" })).toBeInTheDocument()
-    expect(screen.getByRole("heading", { name: "Debug inspection" })).toBeInTheDocument()
+    expect(screen.queryByRole("heading", { name: "Debug inspection" })).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: /Copy session log/ })).toBeInTheDocument()
-    expect(screen.getByText("No agent events yet.")).toBeInTheDocument()
+    expect(screen.getByText("No agent progress events yet.")).toBeInTheDocument()
+  })
+
+  it("recovers the last applied thread after refresh and rolls it back", async () => {
+    const fetchMock = createFetchMock("ok", {
+      threads: [{ id: "thread_recovered", features: [{ id: "feature_1", status: "applied" }], _count: { features: 1 } }],
+    })
+    vi.mocked(fetch).mockImplementation(fetchMock)
+    render(<CatalogueWorkspace userName="Ada Lovelace" userEmail="ada@example.com" logoutAction={vi.fn()} />)
+
+    await screen.findByText("1 feature")
+    expect(screen.getByRole("button", { name: "Undo last change" })).not.toBeDisabled()
+
+    await userEvent.click(screen.getByRole("button", { name: "Undo last change" }))
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/rollback",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ threadId: "thread_recovered" }),
+      }),
+    )
   })
 
   it("shows the signed-in user menu with logout in normal auth mode", async () => {
@@ -104,7 +125,7 @@ describe("CatalogueWorkspace", () => {
   })
 })
 
-function createFetchMock(sandboxStatus: "ok" | "down") {
+function createFetchMock(sandboxStatus: "ok" | "down", threadPayload: { threads: unknown[] } = { threads: [] }) {
   return vi.fn((input: RequestInfo | URL) => {
     const url = String(input)
     if (url === "/api/health") {
@@ -120,9 +141,16 @@ function createFetchMock(sandboxStatus: "ok" | "down") {
       } as Response)
     }
 
+    if (url === "/api/rollback") {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ message: "Rolled back to previous state" }),
+      } as Response)
+    }
+
     return Promise.resolve({
       ok: true,
-      json: async () => ({ threads: [] }),
+      json: async () => threadPayload,
     } as Response)
   })
 }

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Activity, AlertTriangle, CheckCircle2, ChevronDown, CircleOff, LogOut, RefreshCw, ShieldCheck, UserRound } from "lucide-react"
-import { AgentStream, type AgentEvent } from "./AgentStream"
+import type { AgentEvent } from "./AgentStream"
 import { DebugPanel } from "./DebugPanel"
 import { FeatureRequest } from "./FeatureRequest"
 import { ImageStudio } from "./ImageStudio"
@@ -22,6 +22,16 @@ type SandboxHealth = {
   message: string
 }
 
+type ThreadFeature = {
+  id: string
+  status: string
+}
+
+type ThreadSummary = {
+  id: string
+  features?: ThreadFeature[]
+}
+
 export function CatalogueWorkspace({ userName = null, userEmail = null, debugAuthEnabled = false, sandboxUrl = "http://localhost:3001/", logoutAction }: CatalogueWorkspaceProps) {
   const [events, setEvents] = useState<AgentEvent[]>([])
   const [connected, setConnected] = useState(false)
@@ -34,12 +44,25 @@ export function CatalogueWorkspace({ userName = null, userEmail = null, debugAut
   const [identityOpen, setIdentityOpen] = useState(false)
   const [sandboxReloadToken, setSandboxReloadToken] = useState(0)
   const [threadRefreshToken, setThreadRefreshToken] = useState(0)
+  const [rollbackThreadId, setRollbackThreadId] = useState<string | null>(null)
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const currentThreadId = findCurrentThreadId(events)
   const displayName = userName || userEmail || "Signed in"
   const displayEmail = userEmail && userEmail !== displayName ? userEmail : null
   const sandboxFrameUrl = cacheBustUrl(sandboxUrl, sandboxReloadToken)
   const tokenCount = totalTokenUsage(events)
+
+  const loadRollbackTarget = useCallback(async () => {
+    try {
+      const response = await fetch("/api/threads", { cache: "no-store" })
+      const payload = (await response.json()) as { threads?: ThreadSummary[] }
+      if (!response.ok) throw new Error("Could not load threads")
+      const rollbackThread = (payload.threads ?? []).find((thread) => thread.features?.some((feature) => feature.status === "applied"))
+      setRollbackThreadId(rollbackThread?.id ?? null)
+    } catch {
+      setRollbackThreadId(null)
+    }
+  }, [])
 
   const checkSandboxHealth = useCallback(async () => {
     setSandboxHealth({ status: "checking", message: "Checking sandbox." })
@@ -72,6 +95,10 @@ export function CatalogueWorkspace({ userName = null, userEmail = null, debugAut
   }, [checkSandboxHealth])
 
   useEffect(() => {
+    void loadRollbackTarget()
+  }, [loadRollbackTarget, threadRefreshToken])
+
+  useEffect(() => {
     if (sandboxHealth.status !== "unavailable") return
     const interval = window.setInterval(() => void checkSandboxHealth(), 5000)
     return () => window.clearInterval(interval)
@@ -92,6 +119,8 @@ export function CatalogueWorkspace({ userName = null, userEmail = null, debugAut
     }
 
     if (eventType === "turn/completed") {
+      const completedThreadId = readThreadId(event) ?? currentThreadId
+      if (completedThreadId) setRollbackThreadId(completedThreadId)
       window.setTimeout(() => {
         // Next dev HMR can miss file changes from the agent process; reload the iframe after a completed turn.
         setSandboxReloadToken(Date.now())
@@ -99,16 +128,18 @@ export function CatalogueWorkspace({ userName = null, userEmail = null, debugAut
         window.setTimeout(() => setFlash(null), 400)
       }, 1500)
     }
-  }, [])
+  }, [currentThreadId])
 
   const handleRollbackComplete = useCallback(() => {
     setEvents([])
     setFlash("rollback")
+    setRollbackThreadId(null)
     setSandboxReloadToken(Date.now())
     setThreadRefreshToken((token) => token + 1)
+    void loadRollbackTarget()
     void checkSandboxHealth()
     window.setTimeout(() => setFlash(null), 400)
-  }, [checkSandboxHealth])
+  }, [checkSandboxHealth, loadRollbackTarget])
 
   const refreshSandbox = useCallback(() => {
     setSandboxReloadToken(Date.now())
@@ -265,6 +296,7 @@ export function CatalogueWorkspace({ userName = null, userEmail = null, debugAut
               onEvent={appendEvent}
               onConnectionChange={setConnected}
               threadId={currentThreadId}
+              rollbackThreadId={rollbackThreadId}
               events={events}
               onRollbackComplete={handleRollbackComplete}
               onResetComplete={handleRollbackComplete}
@@ -294,17 +326,8 @@ export function CatalogueWorkspace({ userName = null, userEmail = null, debugAut
             </span>
           </button>
           {diagnosticsOpen ? (
-            <div className="grid gap-4 border-t border-zinc-800 p-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(340px,0.75fr)]">
+            <div className="border-t border-zinc-800 p-4">
               <DebugPanel threadId={currentThreadId} events={events} />
-              <section className="rounded-lg border border-zinc-800 bg-zinc-900">
-                <header className="border-b border-zinc-800 p-4">
-                  <h2 className="text-sm font-semibold">Debug inspection</h2>
-                  <p className="mt-1 text-xs text-zinc-400">Raw event output, newest first.</p>
-                </header>
-                <div className="max-h-[460px] overflow-auto p-4">
-                  <AgentStream events={events} />
-                </div>
-              </section>
             </div>
           ) : null}
         </div>

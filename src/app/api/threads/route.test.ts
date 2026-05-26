@@ -40,7 +40,7 @@ describe("/api/threads", () => {
   it("returns only threads with active features for authenticated GET", async () => {
     authMock.mockResolvedValue({ user: { id: "user_1", email: "dev@localhost" } })
     prismaMock.thread.findMany.mockResolvedValue([
-      { id: "thread_1", features: [{ id: "feature_1" }, { id: "feature_2" }] },
+      { id: "thread_1", features: [{ id: "feature_1", status: "applied" }, { id: "feature_2", status: "pending" }] },
     ])
     const { GET } = await import("./route")
 
@@ -59,14 +59,18 @@ describe("/api/threads", () => {
         include: {
           features: {
             where: { status: { in: ["pending", "applied"] } },
-            select: { id: true },
+            select: { id: true, status: true },
           },
         },
       },
     )
     await expect(response.json()).resolves.toEqual({
       threads: [
-        { id: "thread_1", _count: { features: 2 } },
+        {
+          id: "thread_1",
+          features: [{ id: "feature_1", status: "applied" }, { id: "feature_2", status: "pending" }],
+          _count: { features: 2 },
+        },
       ],
     })
   })
