@@ -52,6 +52,7 @@ export function FeatureRequest({
     | "timeout"
     | "moderation"
     | "agent-failed"
+    | "busy"
     | null
   >(null);
   const [connectionAttempt, setConnectionAttempt] = useState(0);
@@ -188,6 +189,12 @@ export function FeatureRequest({
             event.error ??
               "The request timed out before the agent started. Reconnect and send again.",
             "timeout",
+          );
+        } else if (eventType === "bridge-busy") {
+          failRequest(
+            event.error ??
+              "Another sandbox operation is still running. Wait for it to finish, then send again.",
+            "busy",
           );
         } else if (event.flagged) {
           failRequest(
@@ -551,6 +558,7 @@ function connectionMessage(
   if (failure === "timeout") return "Request timed out.";
   if (failure === "moderation") return "Prompt blocked by moderation.";
   if (failure === "agent-failed") return "Agent failed before finishing.";
+  if (failure === "busy") return "Sandbox operation in progress.";
   if (failure === "connection-lost") return "Bridge connection lost.";
   if (connectionState === "connecting") return "Bridge connecting.";
   return "Bridge disconnected.";

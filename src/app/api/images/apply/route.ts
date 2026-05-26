@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "fs/promises"
 import path from "node:path"
 import { auth } from "@/lib/auth"
+import { beginBridgeOperation, endBridgeOperation } from "@/lib/ws-bridge"
 
 type ApplyImageRequest = {
   productId?: string
@@ -26,18 +27,23 @@ export async function POST(req: Request) {
     return Response.json({ error: "Only sandbox image URLs can be applied." }, { status: 400 })
   }
 
-  const filePath = imageOverridesPath()
-  const overrides = await readOverrides(filePath)
-  overrides[body.productId] = body.url
-
-  try {
-    await mkdir(path.dirname(filePath), { recursive: true })
-    await writeFile(filePath, `${JSON.stringify(overrides, null, 2)}\n`)
-  } catch {
-    return Response.json({ error: "Image override could not be saved." }, { status: 500 })
+  const operation = beginBridgeOperation("image")
+  if (!operation.ok) {
+    return Response.json({ error: "Sandbox is busy", operation: operation.operation }, { status: 409 })
   }
 
-  return Response.json({ overrides })
+  const filePath = imageOverridesPath()
+  try {
+    const overrides = await readOverrides(filePath)
+    overrides[body.productId] = body.url
+    await mkdir(path.dirname(filePath), { recursive: true })
+    await writeFile(filePath, `${JSON.stringify(overrides, null, 2)}\n`)
+    return Response.json({ overrides })
+  } catch {
+    return Response.json({ error: "Image override could not be saved." }, { status: 500 })
+  } finally {
+    endBridgeOperation("image")
+  }
 }
 
 async function readRequestBody(req: Request): Promise<ApplyImageRequest | null> {

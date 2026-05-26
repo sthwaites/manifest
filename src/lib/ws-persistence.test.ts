@@ -12,6 +12,9 @@ const prismaMock = vi.hoisted(() => ({
     create: vi.fn(),
     update: vi.fn(),
   },
+  session: {
+    findUnique: vi.fn(),
+  },
 }));
 
 vi.mock("@/lib/prisma", () => ({
@@ -31,6 +34,7 @@ describe("ws persistence", () => {
     prismaMock.thread.upsert.mockReset();
     prismaMock.feature.create.mockReset();
     prismaMock.feature.update.mockReset();
+    prismaMock.session.findUnique.mockReset();
   });
 
   it("persists a started thread for the debug user", async () => {
@@ -71,6 +75,34 @@ describe("ws persistence", () => {
       data: { threadId: "thread_1", prompt: "Add filters", status: "pending" },
     });
     expect(state.activeFeatureId).toBe("feature_1");
+  });
+
+  it("persists started threads for the authenticated session user", async () => {
+    const { createPersistenceState, persistAppServerEvent, setPersistenceUser } =
+      await import("./ws-persistence");
+    const state = createPersistenceState();
+    setPersistenceUser(state, {
+      id: "user_1",
+      email: "user@example.com",
+      name: "Auth User",
+      image: null,
+    });
+
+    await persistAppServerEvent(
+      { method: "thread/started", params: { thread: { id: "thread_1" } } },
+      state,
+      "/tmp/sandbox",
+    );
+
+    expect(prismaMock.thread.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "thread_1" },
+        create: expect.objectContaining({
+          id: "thread_1",
+          userId: "user_1",
+        }),
+      }),
+    );
   });
 
   it("updates the active feature with file diffs and commits sandbox changes on turn completion", async () => {

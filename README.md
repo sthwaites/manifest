@@ -45,10 +45,9 @@ For local development without OAuth, set `DEBUG_AUTH=true`.
 | `AUTH0_CLIENT_SECRET` | OAuth only | Auth0 application client secret.                                                    |
 | `AUTH0_ISSUER`        | OAuth only | Auth0 issuer URL.                                                                   |
 | `DEBUG_AUTH`          | Local only | Set to `true` to bypass OAuth locally.                                              |
-| `NEXT_PUBLIC_SANDBOX_PUBLIC_URL` | Deploy only | Browser URL for the iframe. Use `http://localhost:3001/` locally and `/sandbox/` on Fly. |
-| `SANDBOX_INTERNAL_URL` | Deploy only | Server-side sandbox health URL. Use `http://localhost:3001` locally and `http://localhost:3001/sandbox` on Fly. |
-| `SANDBOX_BASE_PATH`   | Deploy only | Public path used by the proxy for the sandbox, usually `/sandbox`.                  |
-| `NEXT_PUBLIC_SANDBOX_BASE_PATH` | Deploy only | Same value as `SANDBOX_BASE_PATH`; lets the sandbox prefix images and Next assets. |
+| `NEXT_PUBLIC_SANDBOX_PUBLIC_URL` | Local Docker | Browser URL for the iframe. Use `http://localhost:3001/` locally.                   |
+| `SANDBOX_INTERNAL_URL` | Local Docker | Server-side sandbox health URL. Use `http://localhost:3001` locally.                |
+| `SANDBOX_NEXT_DEV_BUNDLER` | Local Docker | Sandbox dev bundler. Defaults to `webpack` for more predictable Docker file watching. |
 
 ## Development
 
@@ -79,13 +78,28 @@ npm run build
 
 ## Docker
 
-The repository includes a production-like `docker-compose.yml` for running the main app, sandbox app, bridge, and SQLite data volume together. The main app runs from `next build`/`next start`; the sandbox runs inside Docker so Codex edits and the preview server share the same containerized workspace. Compose defaults to debug auth, so `/catalogue` opens without Auth0 setup.
+The supported demo path is one locally built Docker container. It runs the production Manifest app, sandbox Next dev server, WebSocket bridge, Codex app-server, SQLite data, and mutable sandbox git working tree in the same filesystem. This avoids split-container file-watch races and stale GHCR images during local testing.
 
 ```bash
 docker compose up --build
 ```
 
-Pass `OPENAI_API_KEY` and optionally `CODEX_API_KEY` from your shell or an uncommitted `.env.local` for agent and image features. `NEXTAUTH_SECRET` defaults to a local debug value in Compose; set it explicitly when testing real auth. To test real OAuth in Docker, rebuild with `DOCKER_DEBUG_AUTH=false` and provide the Auth0 variables.
+Compose defaults to Auth0. Export these before starting:
+
+```bash
+export NEXTAUTH_SECRET="$(openssl rand -base64 32)"
+export AUTH0_CLIENT_ID="..."
+export AUTH0_CLIENT_SECRET="..."
+export AUTH0_ISSUER="https://<your-domain>.auth0.com"
+export OPENAI_API_KEY="sk-..."
+export CODEX_API_KEY="${CODEX_API_KEY:-$OPENAI_API_KEY}"
+```
+
+For a no-OAuth local smoke run, opt into debug auth explicitly:
+
+```bash
+DOCKER_DEBUG_AUTH=true NEXTAUTH_SECRET=manifest-debug-secret docker compose up --build
+```
 
 Open:
 
@@ -97,7 +111,8 @@ Useful Docker checks:
 
 ```bash
 docker compose ps
-docker compose logs app sandbox
+npm run smoke:docker
+docker compose logs app
 ```
 
 CI publishes successful `main` builds to GHCR:
@@ -107,44 +122,7 @@ CI publishes successful `main` builds to GHCR:
 - `ghcr.io/sthwaites/manifest-app:sha-<short-sha>`
 - `ghcr.io/sthwaites/manifest-sandbox:sha-<short-sha>`
 
-## Fly.io
-
-Fly uses the root `Dockerfile` and `fly.toml` to run one public Machine. Inside that single container, the production Manifest app listens on port `3000`, the sandbox Next dev server listens on port `3001`, the Codex WebSocket bridge listens on port `3002` when opened by the app, and `scripts/proxy-server.mjs` exposes one public HTTP service on port `8080`.
-
-Public routing:
-
-- `/` and `/catalogue` proxy to the Manifest app.
-- `/api/ws` proxies to the WebSocket bridge.
-- `/sandbox/` proxies to the sandbox app, with the sandbox built under the `/sandbox` base path.
-
-Before the first deploy, change the `app` and `NEXTAUTH_URL` values in `fly.toml` or pass your own app name through `fly launch --copy-config --name <your-fly-app-name>`.
-
-Create one Fly volume for both SQLite data and the mutable sandbox working tree:
-
-```bash
-fly volumes create manifest_data --size 3 --region lhr
-```
-
-The volume mounts at `/app/persist`. The app stores SQLite data under `/app/persist/data`, and the startup script copies the bundled sandbox template into `/app/persist/sandbox` on first boot, then symlinks `/app/sandbox` there so Codex edits, generated images, and sandbox git history survive restarts and deploys.
-
-Set runtime secrets:
-
-```bash
-fly secrets set \
-  NEXTAUTH_SECRET="$(openssl rand -base64 32)" \
-  OPENAI_API_KEY="sk-..." \
-  CODEX_API_KEY="sk-..."
-```
-
-`CODEX_API_KEY` is used by the `codex app-server` process. If your Codex and OpenAI credentials are the same, set both to the same value. `DATABASE_URL` is intentionally in `fly.toml` as `file:/app/persist/data/prod.db`; update it only if you move the mounted volume.
-
-Deploy:
-
-```bash
-fly deploy
-```
-
-Compose remains the recommended local production-like flow. It still runs the Manifest app and sandbox as separate local containers and keeps the browser iframe at `http://localhost:3001/`.
+Fly.io is currently de-scoped for the demo. `fly.toml` remains in the repo as prior deployment work, but local Docker is the maintained runtime path.
 
 ## CI and Codex Review
 
@@ -155,8 +133,8 @@ The repository also includes an on-demand Codex PR review workflow. Comment `/co
 ## Troubleshooting
 
 - If `/catalogue` redirects to login during local development, set `DEBUG_AUTH=true`.
-- If the laptop resumes with stale local processes, prefer the Docker path: `docker compose down` and then `docker compose up --build`.
-- If the catalogue panel says "Sandbox unavailable", check `docker compose ps`, then restart the sandbox with `docker compose restart sandbox` and use `Check again`.
+- If the laptop resumes with stale local processes, use `docker compose down` and then `docker compose up --build`.
+- If the catalogue panel says "Sandbox unavailable", check `docker compose ps` and `docker compose logs app`; the sandbox supervisor runs inside the app container and should restart the sandbox automatically.
 - If feature requests show app-server or bridge errors, confirm `OPENAI_API_KEY` or `CODEX_API_KEY` is set and inspect `docker compose logs app`.
 - If reset fails, run `npm run sandbox:init` to recreate the sandbox git repository and `baseline` tag.
 - If generated images do not appear, check `OPENAI_API_KEY`, moderation errors, and write access to `sandbox/public/images/`.

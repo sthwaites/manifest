@@ -1,8 +1,10 @@
 import { execSync } from "child_process"
 import path from "node:path"
 import { auth } from "@/lib/auth"
-import { getAppServerClient } from "@/lib/codex-server"
+import { getAppServerClient, restartAppServer } from "@/lib/codex-server"
 import { prisma } from "@/lib/prisma"
+import { requestSandboxRestart } from "@/lib/sandbox-runtime"
+import { beginBridgeOperation, endBridgeOperation, resetWebSocketBridgeState } from "@/lib/ws-bridge"
 
 type RollbackRequest = {
   threadId?: string
@@ -33,6 +35,10 @@ export async function POST(req: Request) {
 
   const body = (await req.json().catch(() => ({}))) as RollbackRequest
   const sandboxDir = path.join(process.cwd(), "sandbox")
+  const operation = beginBridgeOperation("rollback")
+  if (!operation.ok) {
+    return Response.json({ error: "Sandbox is busy", operation: operation.operation }, { status: 409 })
+  }
   let rolledBack = false
 
   try {
@@ -52,6 +58,7 @@ export async function POST(req: Request) {
       }
     }
   } catch (error) {
+    endBridgeOperation("rollback")
     return Response.json({ error: "Rollback failed", detail: errorDetail(error) }, { status: 500 })
   }
 
@@ -69,6 +76,15 @@ export async function POST(req: Request) {
       where: { threadId: body.threadId, status: { in: ["pending", "applied"] } },
       data: { status: "rolled_back" },
     })
+  }
+
+  try {
+    resetWebSocketBridgeState()
+    restartAppServer(sandboxDir)
+    await requestSandboxRestart(sandboxDir)
+  } catch (error) {
+    endBridgeOperation("rollback")
+    return Response.json({ error: "Rollback failed", detail: errorDetail(error) }, { status: 500 })
   }
 
   if (!rolledBack) {

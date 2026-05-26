@@ -15,6 +15,10 @@ const persistenceMock = vi.hoisted(() => ({
   })),
   persistAppServerEvent: vi.fn(),
   persistFeatureRequest: vi.fn(),
+  setPersistenceUser: vi.fn((state, user) => {
+    state.user = user
+  }),
+  findPersistenceUserBySessionToken: vi.fn(),
 }))
 
 vi.mock("./moderation", () => ({
@@ -34,7 +38,11 @@ type TestBridgeState = {
     currentThreadId: string | null
     activeFeatureId: string | null
     fileChanges: string[]
+    user: { id: string; email: string; name: string }
   }
+  activeOperation: "feature" | "rollback" | "reset" | "image" | null
+  activeRequestTimer: ReturnType<typeof setTimeout> | null
+  activeAppServerGeneration: number | null
 }
 
 const globalForBridge = globalThis as unknown as { manifestWsBridge?: TestBridgeState }
@@ -60,7 +68,11 @@ describe("ws bridge state reset", () => {
         currentThreadId: "thread_stale",
         activeFeatureId: "feature_stale",
         fileChanges: ["src/app/page.tsx\n+ stale"],
+        user: { id: "debug-user", email: "dev@localhost", name: "Dev User" },
       },
+      activeOperation: "feature",
+      activeRequestTimer: null,
+      activeAppServerGeneration: 1,
     }
 
     const { resetWebSocketBridgeState } = await import("./ws-bridge")
@@ -134,6 +146,22 @@ describe("ws bridge state reset", () => {
       threadId: "thread_1",
     }))
   })
+
+  it("rejects a feature request while another sandbox operation is active", async () => {
+    const { handleClientMessage } = await import("./ws-bridge")
+    const state = createState()
+    state.activeOperation = "reset"
+    const socket = createSocket()
+
+    await handleClientMessage(socket as never, JSON.stringify({ type: "featureRequest", text: "Add filters" }), "/tmp/sandbox", state)
+
+    expect(socket.send).toHaveBeenCalledWith(JSON.stringify({
+      type: "bridge-busy",
+      error: "Another sandbox operation is still running. Wait for it to finish, then send again.",
+      operation: "reset",
+    }))
+    expect(codexServerMock.startAppServer).not.toHaveBeenCalled()
+  })
 })
 
 function createSocket() {
@@ -155,10 +183,14 @@ function createState(): TestBridgeState & {
     currentThreadId: null,
     pendingInputs: [],
     pendingThreadTimer: null,
+    activeOperation: null,
+    activeRequestTimer: null,
+    activeAppServerGeneration: null,
     persistence: {
       currentThreadId: null,
       activeFeatureId: null,
       fileChanges: [],
+      user: { id: "debug-user", email: "dev@localhost", name: "Dev User" },
     },
   }
 }

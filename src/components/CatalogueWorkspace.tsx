@@ -67,6 +67,19 @@ export function CatalogueWorkspace({ userName = null, userEmail = null, debugAut
     void checkSandboxHealth()
   }, [checkSandboxHealth])
 
+  useEffect(() => {
+    if (sandboxHealth.status !== "unavailable") return
+    const interval = window.setInterval(() => void checkSandboxHealth(), 5000)
+    return () => window.clearInterval(interval)
+  }, [checkSandboxHealth, sandboxHealth.status])
+
+  useEffect(() => {
+    if (sandboxHealth.status !== "online") return
+    if (iframeRef.current) {
+      iframeRef.current.src = iframeRef.current.src
+    }
+  }, [sandboxHealth.status])
+
   const appendEvent = useCallback((event: AgentEvent) => {
     const eventType = event.method ?? event.type
     setEvents((current) => [...current, event])
@@ -89,12 +102,14 @@ export function CatalogueWorkspace({ userName = null, userEmail = null, debugAut
   }, [])
 
   const handleRollbackComplete = useCallback(() => {
+    setEvents([])
     setFlash("rollback")
     if (iframeRef.current) {
       iframeRef.current.src = iframeRef.current.src
     }
+    void checkSandboxHealth()
     window.setTimeout(() => setFlash(null), 400)
-  }, [])
+  }, [checkSandboxHealth])
 
   const refreshSandbox = useCallback(() => {
     if (iframeRef.current) {

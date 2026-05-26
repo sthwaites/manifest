@@ -112,6 +112,7 @@ describe("codex-server", () => {
     await expect(received).resolves.toEqual({
       type: "agentMessage",
       message: "Done",
+      appServerGeneration: 1,
     });
   });
 

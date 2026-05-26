@@ -9,7 +9,7 @@ const sandboxDir = path.join(appDir, "sandbox")
 const sandboxTemplateDir = path.join(appDir, "sandbox-template")
 const persistRoot = process.env.PERSIST_ROOT
 const runSandbox = process.env.RUN_SANDBOX_IN_CONTAINER === "true"
-const runProxy = process.env.START_PROXY === "true" || runSandbox
+const runProxy = process.env.START_PROXY === "true"
 const children = new Set()
 const restartTimers = new Set()
 let shuttingDown = false
@@ -31,6 +31,7 @@ async function main() {
   run("npm", ["run", "sandbox:init"], { cwd: appDir })
 
   if (runSandbox) {
+    const sandboxBasePath = process.env.SANDBOX_BASE_PATH || process.env.NEXT_PUBLIC_SANDBOX_BASE_PATH || ""
     spawnManaged("sandbox", "sh", ["serve-dev.sh"], {
       cwd: sandboxDir,
       env: {
@@ -38,8 +39,9 @@ async function main() {
         PORT: process.env.SANDBOX_PORT || "3001",
         BIND_HOST: "0.0.0.0",
         NODE_ENV: "development",
-        SANDBOX_BASE_PATH: process.env.SANDBOX_BASE_PATH || process.env.NEXT_PUBLIC_SANDBOX_BASE_PATH || "/sandbox",
-        NEXT_PUBLIC_SANDBOX_BASE_PATH: process.env.SANDBOX_BASE_PATH || process.env.NEXT_PUBLIC_SANDBOX_BASE_PATH || "/sandbox",
+        SANDBOX_BASE_PATH: sandboxBasePath,
+        NEXT_PUBLIC_SANDBOX_BASE_PATH: sandboxBasePath,
+        SANDBOX_NEXT_DEV_BUNDLER: process.env.SANDBOX_NEXT_DEV_BUNDLER || "webpack",
       },
       restart: true,
       critical: false,

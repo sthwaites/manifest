@@ -9,7 +9,14 @@ import {
 } from "./codex-server"
 import { eventBus, type AppServerEvent } from "./event-bus"
 import { checkModeration, ModerationError } from "./moderation"
-import { createPersistenceState, persistAppServerEvent, persistFeatureRequest, type PersistenceState } from "./ws-persistence"
+import {
+  createPersistenceState,
+  findPersistenceUserBySessionToken,
+  persistAppServerEvent,
+  persistFeatureRequest,
+  setPersistenceUser,
+  type PersistenceState,
+} from "./ws-persistence"
 import { recordThreadEvent } from "./event-log"
 
 process.env.WS_NO_BUFFER_UTIL = "1"
@@ -22,6 +29,8 @@ type ClientMessage = {
   text?: string
 }
 
+type BridgeOperation = "feature" | "rollback" | "reset" | "image"
+
 export type BridgeState = {
   started: boolean
   listenStatus: "starting" | "listening" | "down"
@@ -29,6 +38,9 @@ export type BridgeState = {
   currentThreadId: string | null
   pendingInputs: string[]
   pendingThreadTimer: ReturnType<typeof setTimeout> | null
+  activeOperation: BridgeOperation | null
+  activeRequestTimer: ReturnType<typeof setTimeout> | null
+  activeAppServerGeneration: number | null
   persistence: PersistenceState
 }
 
@@ -47,6 +59,9 @@ export function ensureWebSocketBridge() {
     currentThreadId: null,
     pendingInputs: [],
     pendingThreadTimer: null,
+    activeOperation: null,
+    activeRequestTimer: null,
+    activeAppServerGeneration: null,
     persistence: createPersistenceState(),
   }
   globalForBridge.manifestWsBridge = state
@@ -65,7 +80,14 @@ export function ensureWebSocketBridge() {
       return
     }
     wss.handleUpgrade(request, socket, head, (socketClient) => {
-      wss.emit("connection", socketClient, request)
+      void (async () => {
+        try {
+          setPersistenceUser(state.persistence, await findPersistenceUserBySessionToken(readSessionToken(request.headers.cookie)))
+        } catch {
+          setPersistenceUser(state.persistence, null)
+        }
+        wss.emit("connection", socketClient, request)
+      })()
     })
   })
 
@@ -131,55 +153,92 @@ export function resetWebSocketBridgeState() {
   state.pendingInputs = []
   if (state.pendingThreadTimer) clearTimeout(state.pendingThreadTimer)
   state.pendingThreadTimer = null
+  releaseBridgeOperation(state)
+  const user = state.persistence.user
   state.persistence = createPersistenceState()
+  setPersistenceUser(state.persistence, user)
+}
+
+export function beginBridgeOperation(operation: BridgeOperation) {
+  const state = globalForBridge.manifestWsBridge
+  if (!state) return { ok: true as const }
+  if (state.activeOperation) {
+    return { ok: false as const, operation: state.activeOperation }
+  }
+  state.activeOperation = operation
+  return { ok: true as const }
+}
+
+export function endBridgeOperation(operation: BridgeOperation) {
+  const state = globalForBridge.manifestWsBridge
+  if (!state || state.activeOperation !== operation) return
+  releaseBridgeOperation(state)
 }
 
 export async function handleClientMessage(socket: WsSocket, data: string, sandboxDir: string, state: BridgeState) {
   const message = parseClientMessage(data)
   if (!message?.text) return
 
+  if (!acquireBridgeOperation(state, "feature")) {
+    sendToClient(socket, {
+      type: "bridge-busy",
+      error: "Another sandbox operation is still running. Wait for it to finish, then send again.",
+      operation: state.activeOperation,
+    })
+    return
+  }
+
   try {
     await checkModeration(message.text)
   } catch (error) {
     if (error instanceof ModerationError) {
       sendToClient(socket, { type: "moderation-blocked", error: "That prompt can't be used — please try different wording.", flagged: true })
+      releaseBridgeOperation(state)
       return
     }
     sendToClient(socket, {
       type: "bridge-error",
       error: error instanceof Error ? error.message : "Bridge failed while checking the request.",
     })
+    releaseBridgeOperation(state)
     return
   }
 
   const appServer = startServerIfAvailable(sandboxDir)
   if (!appServer) {
     clearPendingThreadStart(state)
+    releaseBridgeOperation(state)
     sendToClient(socket, { type: "app-server-unavailable", error: "App-server unavailable." })
     return
   }
+  state.activeAppServerGeneration = appServer.generation ?? null
 
   if (!state.currentThreadId) {
     state.pendingInputs.push(message.text)
-    try {
-      appServer.send(createThreadStartMessage())
+    const accepted = sendAppServerMessage(appServer, createThreadStartMessage())
+    if (accepted) {
       schedulePendingThreadTimeout(state)
-    } catch {
+    } else {
       clearPendingThreadStart(state)
+      releaseBridgeOperation(state)
       sendToClient(socket, { type: "app-server-unavailable", error: "App-server unavailable." })
     }
     return
   }
 
   await persistFeatureRequest(state.persistence, message.text)
-  try {
-    appServer.send(createTurnStartMessage(state.currentThreadId, message.text, sandboxDir))
+  const accepted = sendAppServerMessage(appServer, createTurnStartMessage(state.currentThreadId, message.text, sandboxDir))
+  if (accepted) {
+    scheduleActiveRequestTimeout(state, "The agent stopped responding before the request finished.")
     sendToClient(socket, {
       type: "turn-started",
       message: "Agent accepted the request.",
       threadId: state.currentThreadId,
+      ...(state.activeAppServerGeneration === null ? {} : { appServerGeneration: state.activeAppServerGeneration }),
     })
-  } catch {
+  } else {
+    await persistAppServerEvent({ type: "app-server-unavailable", error: "App-server unavailable." }, state.persistence, sandboxDir)
+    releaseBridgeOperation(state)
     sendToClient(socket, { type: "app-server-unavailable", error: "App-server unavailable." })
   }
 }
@@ -194,6 +253,7 @@ function startServerIfAvailable(sandboxDir: string) {
 
 async function handleAppServerEvent(event: AppServerEvent, state: BridgeState, sandboxDir: string) {
   const method = event.method ?? event.type
+  if (isStaleAppServerEvent(event, state)) return
   const params = typeof event.params === "object" && event.params ? event.params : event
   const threadId = readString(params, "threadId") ?? readString(params, "id") ?? readNestedString(params, "thread", "id")
 
@@ -201,6 +261,13 @@ async function handleAppServerEvent(event: AppServerEvent, state: BridgeState, s
 
   if (method === "app-server-unavailable") {
     clearActiveThread(state)
+    releaseBridgeOperation(state)
+    return
+  }
+
+  if (method === "bridge-request-timeout") {
+    clearActiveThread(state)
+    releaseBridgeOperation(state)
     return
   }
 
@@ -213,18 +280,32 @@ async function handleAppServerEvent(event: AppServerEvent, state: BridgeState, s
     const nextInput = state.pendingInputs.shift()
     if (appServer && nextInput) {
       await persistFeatureRequest(state.persistence, nextInput)
-      try {
-        appServer.send(createTurnStartMessage(threadId, nextInput, sandboxDir))
+      state.activeAppServerGeneration = appServer.generation ?? state.activeAppServerGeneration
+      const accepted = sendAppServerMessage(appServer, createTurnStartMessage(threadId, nextInput, sandboxDir))
+      if (accepted) {
+        scheduleActiveRequestTimeout(state, "The agent stopped responding before the request finished.")
         eventBus.emit("app-server-event", {
           type: "turn-started",
           message: "Agent accepted the request.",
           threadId,
+          appServerGeneration: state.activeAppServerGeneration,
         })
-      } catch {
+      } else {
         clearActiveThread(state)
+        releaseBridgeOperation(state)
         eventBus.emit("app-server-event", { type: "app-server-unavailable", error: "App-server unavailable." })
       }
     }
+    return
+  }
+
+  if (method === "turn-started") {
+    scheduleActiveRequestTimeout(state, "The agent stopped responding before the request finished.")
+    return
+  }
+
+  if (method === "turn/completed") {
+    releaseBridgeOperation(state)
   }
 }
 
@@ -232,11 +313,22 @@ function schedulePendingThreadTimeout(state: BridgeState) {
   if (state.pendingThreadTimer) clearTimeout(state.pendingThreadTimer)
   state.pendingThreadTimer = setTimeout(() => {
     clearPendingThreadStart(state)
+    releaseBridgeOperation(state)
     eventBus.emit("app-server-event", {
       type: "bridge-request-timeout",
       error: "The request timed out before the agent started.",
     })
   }, 30_000)
+}
+
+function scheduleActiveRequestTimeout(state: BridgeState, error: string) {
+  if (state.activeRequestTimer) clearTimeout(state.activeRequestTimer)
+  state.activeRequestTimer = setTimeout(() => {
+    eventBus.emit("app-server-event", {
+      type: "bridge-request-timeout",
+      error,
+    })
+  }, 120_000)
 }
 
 function clearPendingThreadStart(state: BridgeState) {
@@ -253,9 +345,37 @@ function clearActiveThread(state: BridgeState) {
   state.persistence.fileChanges = []
 }
 
+function acquireBridgeOperation(state: BridgeState, operation: BridgeOperation) {
+  if (state.activeOperation) return false
+  state.activeOperation = operation
+  return true
+}
+
+function releaseBridgeOperation(state: BridgeState) {
+  if (state.pendingThreadTimer) clearTimeout(state.pendingThreadTimer)
+  if (state.activeRequestTimer) clearTimeout(state.activeRequestTimer)
+  state.pendingThreadTimer = null
+  state.activeRequestTimer = null
+  state.activeOperation = null
+  state.activeAppServerGeneration = null
+}
+
+function isStaleAppServerEvent(event: AppServerEvent, state: BridgeState) {
+  const generation = typeof event.appServerGeneration === "number" ? event.appServerGeneration : null
+  return generation !== null && state.activeAppServerGeneration !== null && generation !== state.activeAppServerGeneration
+}
+
 function sendToClient(socket: WsSocket, event: AppServerEvent) {
   if (socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify(event))
+  }
+}
+
+function sendAppServerMessage(appServer: { send: (message: unknown) => boolean | void }, message: unknown) {
+  try {
+    return appServer.send(message) !== false
+  } catch {
+    return false
   }
 }
 
@@ -278,4 +398,17 @@ function readNestedString(source: object, objectKey: string, valueKey: string) {
   const nested = source[objectKey as keyof typeof source]
   if (!nested || typeof nested !== "object") return null
   return readString(nested, valueKey)
+}
+
+function readSessionToken(cookieHeader: string | undefined) {
+  if (!cookieHeader) return null
+  const cookies = cookieHeader.split(";").map((cookie) => cookie.trim())
+  for (const cookie of cookies) {
+    const separatorIndex = cookie.indexOf("=")
+    if (separatorIndex <= 0) continue
+    const name = cookie.slice(0, separatorIndex)
+    if (name !== "authjs.session-token" && name !== "__Secure-authjs.session-token") continue
+    return decodeURIComponent(cookie.slice(separatorIndex + 1))
+  }
+  return null
 }

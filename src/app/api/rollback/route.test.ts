@@ -9,6 +9,11 @@ const mocks = vi.hoisted(() => ({
     },
   },
   send: vi.fn(),
+  restart: vi.fn(),
+  resetBridge: vi.fn(),
+  beginBridgeOperation: vi.fn(() => ({ ok: true })),
+  endBridgeOperation: vi.fn(),
+  requestSandboxRestart: vi.fn(),
 }))
 
 vi.mock("@/lib/auth", () => ({
@@ -17,10 +22,21 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/codex-server", () => ({
   getAppServerClient: vi.fn(() => ({ send: mocks.send })),
+  restartAppServer: mocks.restart,
 }))
 
 vi.mock("@/lib/prisma", () => ({
   prisma: mocks.prisma,
+}))
+
+vi.mock("@/lib/ws-bridge", () => ({
+  beginBridgeOperation: mocks.beginBridgeOperation,
+  endBridgeOperation: mocks.endBridgeOperation,
+  resetWebSocketBridgeState: mocks.resetBridge,
+}))
+
+vi.mock("@/lib/sandbox-runtime", () => ({
+  requestSandboxRestart: mocks.requestSandboxRestart,
 }))
 
 vi.mock("child_process", () => ({
@@ -33,6 +49,12 @@ describe("/api/rollback", () => {
     vi.resetModules()
     mocks.auth.mockReset()
     mocks.send.mockReset()
+    mocks.restart.mockReset()
+    mocks.resetBridge.mockReset()
+    mocks.beginBridgeOperation.mockReset()
+    mocks.beginBridgeOperation.mockReturnValue({ ok: true })
+    mocks.endBridgeOperation.mockReset()
+    mocks.requestSandboxRestart.mockReset()
     mocks.execSync.mockReset()
     mocks.prisma.feature.updateMany.mockReset()
   })

@@ -3,14 +3,16 @@ import * as readline from "node:readline";
 import { eventBus, type AppServerEvent } from "./event-bus";
 
 export type AppServerClient = {
-  send: (message: unknown) => void;
+  send: (message: unknown) => boolean;
   process: ChildProcessWithoutNullStreams;
+  generation: number;
 };
 
 let proc: ChildProcessWithoutNullStreams | null = null;
 let client: AppServerClient | null = null;
 let nextMessageId = 1;
 let lastUnavailableMessage: string | null = null;
+let appServerGeneration = 0;
 
 export function startAppServer(sandboxDir: string): AppServerClient {
   if (client && proc && !proc.killed) {
@@ -19,6 +21,7 @@ export function startAppServer(sandboxDir: string): AppServerClient {
 
   try {
     lastUnavailableMessage = null;
+    appServerGeneration += 1;
     proc = spawn(
       "codex",
       [
@@ -51,10 +54,14 @@ export function startAppServer(sandboxDir: string): AppServerClient {
     throw error;
   }
 
+  const generation = appServerGeneration;
   const rl = readline.createInterface({ input: proc.stdout });
   rl.on("line", (line) => {
     try {
-      const message = JSON.parse(line) as AppServerEvent;
+      const message = {
+        ...(JSON.parse(line) as AppServerEvent),
+        appServerGeneration: generation,
+      };
       // Bridge raw App Server events to WebSocket subscribers without coupling UI code to stdio.
       eventBus.emit("app-server-event", message);
     } catch {
@@ -65,8 +72,12 @@ export function startAppServer(sandboxDir: string): AppServerClient {
     }
   });
 
-  proc.on("error", emitUnavailable);
+  proc.on("error", (error) => {
+    if (generation !== appServerGeneration) return;
+    emitUnavailable(error);
+  });
   proc.on("exit", (code, signal) => {
+    if (generation !== appServerGeneration) return;
     lastUnavailableMessage = "App-server exited before the request finished.";
     eventBus.emit("debug-event", { type: "app-server-exit", code, signal });
     eventBus.emit("app-server-event", {
@@ -74,6 +85,7 @@ export function startAppServer(sandboxDir: string): AppServerClient {
       error: lastUnavailableMessage,
       code,
       signal,
+      appServerGeneration: generation,
     });
     proc = null;
     client = null;
@@ -81,10 +93,11 @@ export function startAppServer(sandboxDir: string): AppServerClient {
 
   client = {
     process: proc,
+    generation,
     send(message: unknown) {
       if (!proc || proc.killed) {
         emitUnavailable();
-        return;
+        return false;
       }
       try {
         const writable = proc.stdin.write(
@@ -95,9 +108,12 @@ export function startAppServer(sandboxDir: string): AppServerClient {
         );
         if (!writable && proc.stdin.destroyed) {
           emitUnavailable(new Error("App-server stdin closed"));
+          return false;
         }
+        return true;
       } catch (error) {
         emitUnavailable(error);
+        return false;
       }
     },
   };
@@ -199,5 +215,6 @@ function emitUnavailable(error?: unknown) {
   eventBus.emit("app-server-event", {
     type: "app-server-unavailable",
     error: lastUnavailableMessage,
+    appServerGeneration,
   });
 }

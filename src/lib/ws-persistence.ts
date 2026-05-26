@@ -6,9 +6,17 @@ export type PersistenceState = {
   currentThreadId: string | null;
   activeFeatureId: string | null;
   fileChanges: string[];
+  user: PersistenceUser;
 };
 
-const debugUser = {
+type PersistenceUser = {
+  id: string;
+  email: string;
+  name: string | null;
+  image?: string | null;
+};
+
+const debugUser: PersistenceUser = {
   id: "debug-user",
   email: "dev@localhost",
   name: "Dev User",
@@ -19,6 +27,29 @@ export function createPersistenceState(): PersistenceState {
     currentThreadId: null,
     activeFeatureId: null,
     fileChanges: [],
+    user: debugUser,
+  };
+}
+
+export function setPersistenceUser(state: PersistenceState, user: PersistenceUser | null) {
+  state.user = user ?? debugUser;
+}
+
+export async function findPersistenceUserBySessionToken(sessionToken: string | null | undefined) {
+  if (process.env.DEBUG_AUTH === "true") return debugUser;
+  if (!sessionToken) return null;
+
+  const session = await prisma.session.findUnique({
+    where: { sessionToken },
+    include: { user: true },
+  });
+  if (!session?.user || session.expires.getTime() <= Date.now()) return null;
+
+  return {
+    id: session.user.id,
+    email: session.user.email,
+    name: session.user.name,
+    image: session.user.image,
   };
 }
 
@@ -50,7 +81,7 @@ export async function persistAppServerEvent(
     const threadId = getThreadId(event);
     if (!threadId) return;
     state.currentThreadId = threadId;
-    await ensureThread(threadId);
+    await ensureThread(threadId, state.user);
     return;
   }
 
@@ -70,19 +101,19 @@ export async function persistAppServerEvent(
   }
 }
 
-async function ensureThread(threadId: string) {
+async function ensureThread(threadId: string, user: PersistenceUser) {
   await prisma.user.upsert({
-    where: { id: debugUser.id },
-    update: { email: debugUser.email, name: debugUser.name },
-    create: debugUser,
+    where: { id: user.id },
+    update: { email: user.email, name: user.name, image: user.image },
+    create: user,
   });
 
   await prisma.thread.upsert({
     where: { id: threadId },
-    update: { userId: debugUser.id },
+    update: { userId: user.id },
     create: {
       id: threadId,
-      userId: debugUser.id,
+      userId: user.id,
       summary: "Codex session",
     },
   });

@@ -4,7 +4,10 @@ const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   execSync: vi.fn(),
   resetBridge: vi.fn(),
+  beginBridgeOperation: vi.fn(() => ({ ok: true })),
+  endBridgeOperation: vi.fn(),
   restart: vi.fn(),
+  requestSandboxRestart: vi.fn(),
 }))
 
 vi.mock("@/lib/auth", () => ({
@@ -16,7 +19,13 @@ vi.mock("@/lib/codex-server", () => ({
 }))
 
 vi.mock("@/lib/ws-bridge", () => ({
+  beginBridgeOperation: mocks.beginBridgeOperation,
+  endBridgeOperation: mocks.endBridgeOperation,
   resetWebSocketBridgeState: mocks.resetBridge,
+}))
+
+vi.mock("@/lib/sandbox-runtime", () => ({
+  requestSandboxRestart: mocks.requestSandboxRestart,
 }))
 
 vi.mock("child_process", () => ({
@@ -28,6 +37,10 @@ describe("/api/reset", () => {
   beforeEach(() => {
     vi.resetModules()
     mocks.auth.mockReset()
+    mocks.beginBridgeOperation.mockReset()
+    mocks.beginBridgeOperation.mockReturnValue({ ok: true })
+    mocks.endBridgeOperation.mockReset()
+    mocks.requestSandboxRestart.mockReset()
     mocks.resetBridge.mockReset()
     mocks.restart.mockReset()
     mocks.execSync.mockReset()
@@ -53,6 +66,7 @@ describe("/api/reset", () => {
     expect(mocks.execSync).toHaveBeenCalledWith("git clean -fd", expect.objectContaining({ cwd: expect.stringContaining("sandbox") }))
     expect(mocks.resetBridge).toHaveBeenCalled()
     expect(mocks.restart).toHaveBeenCalledWith(expect.stringContaining("sandbox"))
+    expect(mocks.requestSandboxRestart).toHaveBeenCalledWith(expect.stringContaining("sandbox"))
     await expect(response.json()).resolves.toEqual({ message: "Sandbox reset to baseline" })
   })
 

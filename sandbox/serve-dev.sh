@@ -5,12 +5,23 @@ port="${PORT:-3001}"
 host="${BIND_HOST:-0.0.0.0}"
 base_path="${SANDBOX_BASE_PATH:-${NEXT_PUBLIC_SANDBOX_BASE_PATH:-}}"
 health_url="http://127.0.0.1:${port}${base_path:-/}"
+restart_marker="${SANDBOX_RESTART_MARKER:-.manifest-restart}"
+clear_cache_marker="${SANDBOX_CLEAR_CACHE_MARKER:-.manifest-clear-cache}"
+bundler="${SANDBOX_NEXT_DEV_BUNDLER:-webpack}"
 failure_count=0
 server_pid=""
 
 start_server() {
-  rm -rf .next
-  ./node_modules/.bin/next dev --hostname "$host" --port "$port" &
+  if [ -f "$clear_cache_marker" ]; then
+    rm -rf .next
+    rm -f "$clear_cache_marker"
+  fi
+
+  if [ "$bundler" = "webpack" ]; then
+    ./node_modules/.bin/next dev --webpack --hostname "$host" --port "$port" &
+  else
+    ./node_modules/.bin/next dev --hostname "$host" --port "$port" &
+  fi
   server_pid="$!"
   failure_count=0
 }
@@ -34,13 +45,22 @@ probe_server() {
 trap 'stop_server; exit 0' INT TERM
 
 start_server
-sleep 20
+sleep "${SANDBOX_START_GRACE_SECONDS:-45}"
 
 while true; do
+  if [ -f "$restart_marker" ]; then
+    echo "Sandbox restart requested." >&2
+    rm -f "$restart_marker"
+    stop_server
+    start_server
+    sleep "${SANDBOX_START_GRACE_SECONDS:-45}"
+    continue
+  fi
+
   if ! kill -0 "$server_pid" 2>/dev/null; then
     wait "$server_pid" 2>/dev/null || true
     start_server
-    sleep 20
+    sleep "${SANDBOX_START_GRACE_SECONDS:-45}"
     continue
   fi
 
@@ -51,12 +71,15 @@ while true; do
   fi
 
   if [ "$failure_count" -ge 3 ]; then
-    echo "Sandbox dev server failed health checks; clearing cache and restarting." >&2
+    echo "Sandbox dev server failed health checks; restarting." >&2
+    if [ "$failure_count" -ge 6 ]; then
+      touch "$clear_cache_marker"
+    fi
     stop_server
     start_server
-    sleep 20
+    sleep "${SANDBOX_START_GRACE_SECONDS:-45}"
     continue
   fi
 
-  sleep 10
+  sleep "${SANDBOX_HEALTH_INTERVAL_SECONDS:-15}"
 done

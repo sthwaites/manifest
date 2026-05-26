@@ -190,6 +190,46 @@ describe("FeatureRequest", () => {
     ).not.toBeDisabled();
   });
 
+  it("preserves the prompt when the bridge reports another sandbox operation is running", async () => {
+    renderFeatureRequest();
+
+    await userEvent.type(
+      screen.getByPlaceholderText(
+        "Describe the catalogue change you want Codex to make...",
+      ),
+      "Add filters",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Submit feature request" }),
+    );
+
+    act(() => {
+      MockWebSocket.instances[0].dispatchEvent(
+        new MessageEvent("message", {
+          data: JSON.stringify({
+            type: "bridge-busy",
+            error:
+              "Another sandbox operation is still running. Wait for it to finish, then send again.",
+          }),
+        }),
+      );
+    });
+
+    expect(
+      await screen.findByText(
+        "Another sandbox operation is still running. Wait for it to finish, then send again.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Sandbox operation in progress."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText(
+        "Describe the catalogue change you want Codex to make...",
+      ),
+    ).toHaveValue("Add filters");
+  });
+
   it("restores the prompt when the WebSocket closes during submit", async () => {
     renderFeatureRequest();
 
