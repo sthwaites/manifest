@@ -28,10 +28,12 @@ export function AgentStream({ events }: AgentStreamProps) {
     )
   }
 
+  const displayEvents = events.map((event, index) => ({ event, originalIndex: index })).reverse()
+
   return (
     <div className="space-y-3" aria-label="Agent events">
-      {events.map((event, index) => (
-        <EventItem key={`${event.type ?? event.method ?? "event"}-${index}`} event={event} index={index} />
+      {displayEvents.map(({ event, originalIndex }, displayIndex) => (
+        <EventItem key={`${event.type ?? event.method ?? "event"}-${originalIndex}`} event={event} index={displayIndex} />
       ))}
     </div>
   )

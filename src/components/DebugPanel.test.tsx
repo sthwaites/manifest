@@ -21,6 +21,7 @@ describe("DebugPanel", () => {
   it("renders known events as readable table rows", () => {
     render(<DebugPanel threadId="thread_1" events={events} />)
 
+    expect(screen.getByRole("heading", { name: "Agent progress" })).toBeInTheDocument()
     expect(screen.getByText("thread_1")).toBeInTheDocument()
     expect(screen.getByText("42 tokens")).toBeInTheDocument()
     expect(screen.getByRole("columnheader", { name: "Time" })).toBeInTheDocument()
@@ -30,6 +31,15 @@ describe("DebugPanel", () => {
     expect(screen.getByText("Turn completed")).toBeInTheDocument()
     expect(screen.getByText("Updated src/app/page.tsx")).toBeInTheDocument()
     expect(screen.queryByText(/"path": "src\/app\/page.tsx"/)).not.toBeInTheDocument()
+  })
+
+  it("renders newest events first", () => {
+    render(<DebugPanel threadId="thread_1" events={events} />)
+
+    const rows = screen.getAllByRole("row")
+    expect(rows[1]).toHaveTextContent("Turn completed")
+    expect(rows[2]).toHaveTextContent("File changed")
+    expect(rows[3]).toHaveTextContent("Thread started")
   })
 
   it("keeps raw JSON hidden by default and visible when expanded", async () => {

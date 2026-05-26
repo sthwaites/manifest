@@ -55,26 +55,27 @@ describe("CatalogueWorkspace", () => {
     expect(screen.getByRole("button", { name: "Generate" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Undo last change" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Reset baseline" })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /Copy session log/ })).toBeInTheDocument()
-    expect(screen.getByText("Debug inspection")).toBeInTheDocument()
-    expect(screen.getByText("Debug inspection").closest("section")).not.toHaveTextContent("Undo last change")
-    expect(screen.getByText("Debug inspection").closest("section")).not.toHaveTextContent("Reset baseline")
-    expect(screen.getByRole("button", { name: /Agent progress/ })).toHaveAttribute("aria-expanded", "false")
+    expect(screen.getByRole("button", { name: /Diagnostics/ })).toHaveAttribute("aria-expanded", "false")
+    expect(screen.queryByRole("heading", { name: "Agent progress" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("heading", { name: "Debug inspection" })).not.toBeInTheDocument()
     expect(await screen.findByText("No sessions yet. Describe a feature to get started.")).toBeInTheDocument()
   })
 
-  it("keeps agent progress collapsed at the bottom until expanded", async () => {
+  it("keeps diagnostics collapsed across the bottom until expanded", async () => {
     render(<CatalogueWorkspace userName="Ada Lovelace" userEmail="ada@example.com" logoutAction={vi.fn()} />)
 
-    const agentProgress = screen.getByRole("button", { name: /Agent progress/ })
-    const debugInspection = screen.getByText("Debug inspection")
+    const diagnostics = screen.getByRole("button", { name: /Diagnostics/ })
+    const threadHistory = screen.getByText("Threads")
 
-    expect(agentProgress.compareDocumentPosition(debugInspection) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy()
+    expect(diagnostics.compareDocumentPosition(threadHistory) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy()
     expect(screen.queryByText("No agent events yet.")).not.toBeInTheDocument()
 
-    await userEvent.click(agentProgress)
+    await userEvent.click(diagnostics)
 
-    expect(agentProgress).toHaveAttribute("aria-expanded", "true")
+    expect(diagnostics).toHaveAttribute("aria-expanded", "true")
+    expect(screen.getByRole("heading", { name: "Agent progress" })).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "Debug inspection" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /Copy session log/ })).toBeInTheDocument()
     expect(screen.getByText("No agent events yet.")).toBeInTheDocument()
   })
 

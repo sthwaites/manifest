@@ -16,6 +16,14 @@ describe("AgentStream", () => {
     expect(screen.getByText("I updated the grid.")).toBeInTheDocument()
   })
 
+  it("renders newest events first", () => {
+    render(<AgentStream events={[{ type: "agentMessage", message: "Older update" }, { type: "agentMessage", message: "Newest update" }]} />)
+
+    const items = screen.getAllByRole("article")
+    expect(items[0]).toHaveTextContent("Newest update")
+    expect(items[1]).toHaveTextContent("Older update")
+  })
+
   it("renders a fileChange event with filename and status badge", () => {
     render(<AgentStream events={[{ type: "fileChange", path: "src/app/page.tsx", status: "modified" }]} />)
 

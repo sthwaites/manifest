@@ -30,7 +30,7 @@ export function CatalogueWorkspace({ userName = null, userEmail = null, debugAut
     status: "checking",
     message: "Checking sandbox.",
   })
-  const [agentProgressOpen, setAgentProgressOpen] = useState(false)
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false)
   const [identityOpen, setIdentityOpen] = useState(false)
   const [sandboxReloadToken, setSandboxReloadToken] = useState(0)
   const [threadRefreshToken, setThreadRefreshToken] = useState(0)
@@ -39,6 +39,7 @@ export function CatalogueWorkspace({ userName = null, userEmail = null, debugAut
   const displayName = userName || userEmail || "Signed in"
   const displayEmail = userEmail && userEmail !== displayName ? userEmail : null
   const sandboxFrameUrl = cacheBustUrl(sandboxUrl, sandboxReloadToken)
+  const tokenCount = totalTokenUsage(events)
 
   const checkSandboxHealth = useCallback(async () => {
     setSandboxHealth({ status: "checking", message: "Checking sandbox." })
@@ -273,32 +274,41 @@ export function CatalogueWorkspace({ userName = null, userEmail = null, debugAut
           <ImageStudio products={seedProducts} sandboxWindow={iframeRef.current?.contentWindow ?? null} />
 
           <ThreadHistory onRollbackComplete={handleRollbackComplete} refreshToken={threadRefreshToken} />
-
-          <DebugPanel threadId={currentThreadId} events={events} />
-
-          <section className="rounded-lg border border-zinc-800 bg-zinc-900">
-            <button
-              type="button"
-              onClick={() => setAgentProgressOpen((open) => !open)}
-              aria-expanded={agentProgressOpen}
-              className="flex w-full items-center justify-between gap-3 p-4 text-left"
-            >
-              <span className="text-sm font-semibold">Agent progress</span>
-              <span className="flex items-center gap-2 text-xs tabular-nums text-zinc-500">
-                {events.length} events
-                <ChevronDown className={`size-4 transition ${agentProgressOpen ? "rotate-180" : ""}`} />
-              </span>
-            </button>
-            {agentProgressOpen ? (
-              <div className="border-t border-zinc-800 p-4 pt-3">
-                <div className="max-h-80 overflow-auto pr-1">
-                  <AgentStream events={events} />
-                </div>
-              </div>
-            ) : null}
-          </section>
         </aside>
       </div>
+
+      <section className="border-t border-zinc-800 bg-zinc-950 px-4 pb-4 lg:px-5">
+        <div className="rounded-lg border border-zinc-800 bg-zinc-900">
+          <button
+            type="button"
+            onClick={() => setDiagnosticsOpen((open) => !open)}
+            aria-expanded={diagnosticsOpen}
+            className="flex w-full flex-wrap items-center justify-between gap-3 p-4 text-left"
+          >
+            <span className="text-sm font-semibold">Diagnostics</span>
+            <span className="flex flex-wrap items-center justify-end gap-3 text-xs text-zinc-500">
+              <span>{currentThreadId ?? "No thread"}</span>
+              <span className="tabular-nums">{events.length} events</span>
+              <span className="tabular-nums">{tokenCount} tokens</span>
+              <ChevronDown className={`size-4 transition ${diagnosticsOpen ? "rotate-180" : ""}`} />
+            </span>
+          </button>
+          {diagnosticsOpen ? (
+            <div className="grid gap-4 border-t border-zinc-800 p-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(340px,0.75fr)]">
+              <DebugPanel threadId={currentThreadId} events={events} />
+              <section className="rounded-lg border border-zinc-800 bg-zinc-900">
+                <header className="border-b border-zinc-800 p-4">
+                  <h2 className="text-sm font-semibold">Debug inspection</h2>
+                  <p className="mt-1 text-xs text-zinc-400">Raw event output, newest first.</p>
+                </header>
+                <div className="max-h-[460px] overflow-auto p-4">
+                  <AgentStream events={events} />
+                </div>
+              </section>
+            </div>
+          ) : null}
+        </div>
+      </section>
     </main>
   )
 }
@@ -341,6 +351,21 @@ function readString(source: object, key: string) {
 function readNestedString(source: object, objectKey: string, valueKey: string) {
   const nested = readObject(source, objectKey)
   return nested ? readString(nested, valueKey) : null
+}
+
+function readNumber(source: object, key: string) {
+  if (!(key in source)) return null
+  const value = source[key as keyof typeof source]
+  return typeof value === "number" ? value : null
+}
+
+function totalTokenUsage(events: AgentEvent[]) {
+  return events.reduce((total, event) => {
+    const params = readObject(event, "params")
+    const usage = params ? readObject(params, "tokenUsage") : readObject(event, "tokenUsage")
+    const tokens = usage ? readNumber(usage, "total") ?? readNumber(usage, "totalTokens") : null
+    return total + (tokens ?? 0)
+  }, 0)
 }
 
 function initialFor(value: string) {

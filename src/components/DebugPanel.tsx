@@ -23,6 +23,7 @@ export function DebugPanel({ threadId, events }: DebugPanelProps) {
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const tokenCount = useMemo(() => events.reduce((total, event) => total + readTokenUsage(event), 0), [events])
+  const displayEvents = useMemo(() => events.map((event, index) => ({ event, originalIndex: index })).reverse(), [events])
 
   async function copyLog() {
     await navigator.clipboard.writeText(JSON.stringify(events, null, 2))
@@ -30,11 +31,11 @@ export function DebugPanel({ threadId, events }: DebugPanelProps) {
   }
 
   return (
-    <section className="rounded-lg border border-zinc-800 bg-zinc-900">
+    <section className="h-full rounded-lg border border-zinc-800 bg-zinc-900">
       <header className="border-b border-zinc-800 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-sm font-semibold">Debug inspection</h2>
+            <h2 className="text-sm font-semibold">Agent progress</h2>
             <div className="mt-1 flex flex-wrap gap-3 text-xs text-zinc-400">
               <span>{threadId ?? "No thread"}</span>
               <span className="tabular-nums">{tokenCount} tokens</span>
@@ -57,8 +58,8 @@ export function DebugPanel({ threadId, events }: DebugPanelProps) {
 
       {toast ? <p className="border-b border-zinc-800 px-4 py-2 text-sm text-emerald-400">{toast}</p> : null}
 
-      <div className="max-h-[520px] overflow-auto">
-        {events.length === 0 ? <p className="p-4 text-sm text-zinc-400">No debug events yet.</p> : null}
+      <div className="max-h-[460px] overflow-auto">
+        {events.length === 0 ? <p className="p-4 text-sm text-zinc-400">No agent progress events yet.</p> : null}
         {events.length > 0 ? (
           <table className="min-w-[760px] w-full text-left text-xs">
             <thead className="sticky top-0 z-10 border-b border-zinc-800 bg-zinc-900 text-zinc-500">
@@ -72,13 +73,13 @@ export function DebugPanel({ threadId, events }: DebugPanelProps) {
               </tr>
             </thead>
             <tbody>
-              {events.map((event, index) => {
+              {displayEvents.map(({ event, originalIndex }) => {
                 const summary = summarizeEvent(event)
-                const expanded = expandedIndex === index
+                const expanded = expandedIndex === originalIndex
                 const hasDiff = typeof event.diff === "string" && event.diff.length > 0
 
                 return (
-                  <tr key={`${summary.event}-${index}`} className="border-b border-zinc-800/80 align-top">
+                  <tr key={`${summary.event}-${originalIndex}`} className="border-b border-zinc-800/80 align-top">
                     <td className="whitespace-nowrap px-3 py-2 font-mono text-zinc-400">{summary.time}</td>
                     <td className="px-3 py-2">
                       <span className={`inline-flex rounded px-2 py-1 font-medium ${toneClass(summary.tone)}`}>{summary.event}</span>
@@ -89,7 +90,7 @@ export function DebugPanel({ threadId, events }: DebugPanelProps) {
                         {hasDiff ? (
                           <button
                             type="button"
-                            onClick={() => setExpandedIndex(expanded ? null : index)}
+                            onClick={() => setExpandedIndex(expanded ? null : originalIndex)}
                             className="inline-flex items-center gap-1 text-amber-300 transition hover:text-amber-200"
                           >
                             <ChevronDown className={`size-3 transition ${expanded ? "rotate-180" : ""}`} />
@@ -98,7 +99,7 @@ export function DebugPanel({ threadId, events }: DebugPanelProps) {
                         ) : null}
                         <button
                           type="button"
-                          onClick={() => setExpandedIndex(expanded ? null : index)}
+                          onClick={() => setExpandedIndex(expanded ? null : originalIndex)}
                           className="inline-flex items-center gap-1 text-zinc-400 transition hover:text-zinc-100"
                         >
                           <ChevronDown className={`size-3 transition ${expanded ? "rotate-180" : ""}`} />
