@@ -24,7 +24,10 @@ type ProgressStage =
   | "failed";
 
 const THREAD_START_TIMEOUT_MS = 30_000;
-const AGENT_ACTIVITY_TIMEOUT_MS = 120_000;
+// The bridge owns the 120s agent watchdog and can synthesize a successful completion
+// after visible file changes. Keep the browser watchdog longer so it does not race
+// the bridge and report a false failure just before completion arrives.
+const AGENT_ACTIVITY_TIMEOUT_MS = 150_000;
 
 export function FeatureRequest({
   onEvent,
@@ -221,6 +224,7 @@ export function FeatureRequest({
           } else if (eventType === "turn/completed") {
             clearRequestTimers();
             lastSubmittedPromptRef.current = null;
+            setError(null);
             setRequestFailure(null);
             setSubmitting(false);
           } else if (lastSubmittedPromptRef.current && isAgentActivity(event)) {

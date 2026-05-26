@@ -340,7 +340,7 @@ describe("FeatureRequest", () => {
           }),
         }),
       );
-      vi.advanceTimersByTime(120_000);
+      vi.advanceTimersByTime(150_000);
     });
 
     expect(
@@ -406,6 +406,53 @@ describe("FeatureRequest", () => {
         screen.queryByRole("button", { name: "Retry" }),
       ).not.toBeInTheDocument(),
     );
+    expect(screen.getByText("Applied")).toHaveAttribute("aria-current", "step");
+  });
+
+  it("clears a stale timeout error if completion arrives afterwards", async () => {
+    vi.useFakeTimers();
+    renderFeatureRequest();
+
+    fireEvent.change(
+      screen.getByPlaceholderText(
+        "Describe the catalogue change you want Codex to make...",
+      ),
+      { target: { value: "Add filters" } },
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Submit feature request" }),
+    );
+    act(() => {
+      MockWebSocket.instances[0].dispatchEvent(
+        new MessageEvent("message", {
+          data: JSON.stringify({
+            method: "thread/started",
+            params: { thread: { id: "thread_1" } },
+          }),
+        }),
+      );
+      vi.advanceTimersByTime(150_000);
+    });
+
+    expect(
+      screen.getByText(
+        "The agent stopped responding before the request finished. Reconnect and send again.",
+      ),
+    ).toBeInTheDocument();
+
+    act(() => {
+      MockWebSocket.instances[0].dispatchEvent(
+        new MessageEvent("message", {
+          data: JSON.stringify({ method: "turn/completed" }),
+        }),
+      );
+    });
+
+    expect(
+      screen.queryByText(
+        "The agent stopped responding before the request finished. Reconnect and send again.",
+      ),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("Applied")).toHaveAttribute("aria-current", "step");
   });
 
