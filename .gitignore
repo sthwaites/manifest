@@ -5,7 +5,9 @@ sandbox/node_modules/
 
 # Next.js build output
 .next/
+.next-*/
 sandbox/.next/
+sandbox/.next-*/
 out/
 sandbox/out/
 
@@ -40,6 +42,7 @@ Thumbs.db
 # Local agent/MCP tooling
 .codex/
 .mcp.json
+.playwright-mcp/
 
 # Fly.io — fly.toml is safe to commit (no secrets); .fly/ is local state
 .fly/

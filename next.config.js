@@ -1,7 +1,9 @@
 /** @type {import('next').NextConfig} */
 const sandboxInternalUrl = process.env.SANDBOX_INTERNAL_URL ?? "http://localhost:3001"
+const manifestDistDir = process.env.MANIFEST_DIST_DIR || ""
 
 const nextConfig = {
+  ...(manifestDistDir ? { distDir: manifestDistDir } : {}),
   env: {
     DEBUG_AUTH: process.env.DEBUG_AUTH ?? "false",
   },
