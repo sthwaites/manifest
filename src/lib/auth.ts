@@ -8,6 +8,33 @@ import { prisma } from "./prisma"
 
 const debugAuth = process.env.DEBUG_AUTH === "true"
 
+function hasValue(value: string | undefined) {
+  return Boolean(value && value.trim().length > 0)
+}
+
+function hasValidUrl(value: string | undefined) {
+  if (!hasValue(value)) return false
+
+  try {
+    new URL(value as string)
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function getAuthConfigIssue() {
+  if (debugAuth) return null
+
+  if (!hasValue(process.env.NEXTAUTH_SECRET)) return "NEXTAUTH_SECRET is not set."
+  if (!hasValidUrl(process.env.NEXTAUTH_URL)) return "NEXTAUTH_URL must be a valid URL."
+  if (!hasValue(process.env.AUTH0_CLIENT_ID)) return "AUTH0_CLIENT_ID is not set."
+  if (!hasValue(process.env.AUTH0_CLIENT_SECRET)) return "AUTH0_CLIENT_SECRET is not set."
+  if (!hasValidUrl(process.env.AUTH0_ISSUER)) return "AUTH0_ISSUER must be a valid URL."
+
+  return null
+}
+
 const nextAuth = NextAuth({
   adapter: PrismaAdapter(prisma),
   providers: debugAuth

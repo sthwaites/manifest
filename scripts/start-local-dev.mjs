@@ -1,11 +1,15 @@
 import { spawn, spawnSync } from "node:child_process"
+import nextEnv from "@next/env"
 
 const children = new Set()
 let shuttingDown = false
+const { loadEnvConfig } = nextEnv
 
 main()
 
 function main() {
+  loadEnvConfig(process.cwd())
+
   run("npx", ["prisma", "generate"])
   run("npm", ["run", "sandbox:init"])
 
