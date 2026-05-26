@@ -33,6 +33,7 @@ export function startAppServer(sandboxDir: string): AppServerClient {
       ],
       {
         cwd: sandboxDir,
+        detached: process.platform !== "win32",
         stdio: ["pipe", "pipe", "pipe"],
         env: {
           ...process.env,
@@ -78,6 +79,7 @@ export function startAppServer(sandboxDir: string): AppServerClient {
   });
   proc.on("exit", (code, signal) => {
     if (generation !== appServerGeneration) return;
+    stopProcessGroup(proc);
     lastUnavailableMessage = "App-server exited before the request finished.";
     eventBus.emit("debug-event", { type: "app-server-exit", code, signal });
     eventBus.emit("app-server-event", {
@@ -124,7 +126,7 @@ export function startAppServer(sandboxDir: string): AppServerClient {
 
 export function restartAppServer(sandboxDir: string): AppServerClient {
   if (proc && !proc.killed) {
-    proc.kill();
+    stopProcessGroup(proc);
   }
   proc = null;
   client = null;
@@ -206,6 +208,23 @@ function initializeAppServer(appServerClient: AppServerClient) {
         apiKey,
       },
     });
+  }
+}
+
+function stopProcessGroup(child: ChildProcessWithoutNullStreams | null) {
+  if (!child || child.killed) return;
+  try {
+    if (process.platform !== "win32" && child.pid) {
+      process.kill(-child.pid, "SIGTERM");
+      return;
+    }
+    child.kill("SIGTERM");
+  } catch {
+    try {
+      child.kill("SIGTERM");
+    } catch {
+      // The process may have already exited.
+    }
   }
 }
 

@@ -66,7 +66,7 @@ describe("/api/reset", () => {
     expect(mocks.execSync).toHaveBeenCalledWith("git clean -fd", expect.objectContaining({ cwd: expect.stringContaining("sandbox") }))
     expect(mocks.resetBridge).toHaveBeenCalled()
     expect(mocks.restart).toHaveBeenCalledWith(expect.stringContaining("sandbox"))
-    expect(mocks.requestSandboxRestart).toHaveBeenCalledWith(expect.stringContaining("sandbox"))
+    expect(mocks.requestSandboxRestart).toHaveBeenCalledWith(expect.stringContaining("sandbox"), { clearCache: true })
     await expect(response.json()).resolves.toEqual({ message: "Sandbox reset to baseline" })
   })
 

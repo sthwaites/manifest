@@ -87,6 +87,7 @@ describe("codex-server", () => {
         'sandbox_mode="danger-full-access"',
       ],
       expect.objectContaining({
+        detached: process.platform !== "win32",
         env: expect.objectContaining({
           GIT_AUTHOR_NAME: "Manifest Agent",
           GIT_AUTHOR_EMAIL: "manifest-agent@example.invalid",

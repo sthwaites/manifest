@@ -49,6 +49,7 @@ type TestBridgeState = {
   }
   activeOperation: "feature" | "rollback" | "reset" | "image" | null
   activeRequestTimer: ReturnType<typeof setTimeout> | null
+  syntheticCompletionTimer: ReturnType<typeof setTimeout> | null
   activeAppServerGeneration: number | null
 }
 
@@ -81,6 +82,7 @@ describe("ws bridge state reset", () => {
       },
       activeOperation: "feature",
       activeRequestTimer: null,
+      syntheticCompletionTimer: null,
       activeAppServerGeneration: 1,
     }
 
@@ -196,6 +198,27 @@ describe("ws bridge state reset", () => {
       warning: "The agent stopped reporting progress after changing files; saved the visible sandbox changes.",
     })
   })
+
+  it("synthesizes completion soon after file changes settle", async () => {
+    vi.useFakeTimers()
+    execSyncMock.mockReturnValue(" M src/app/page.tsx\n")
+    const { eventBus } = await import("./event-bus")
+    const { handleAppServerEvent } = await import("./ws-bridge")
+    const state = createState()
+    state.currentThreadId = "thread_1"
+    state.activeOperation = "feature"
+    state.persistence.currentThreadId = "thread_1"
+    state.persistence.activeFeatureId = "feature_1"
+    const received = new Promise((resolve) => eventBus.once("app-server-event", resolve))
+
+    await handleAppServerEvent({ type: "fileChange", path: "src/app/page.tsx" }, state, "/tmp/sandbox")
+    vi.advanceTimersByTime(4_000)
+
+    await expect(received).resolves.toMatchObject({
+      method: "turn/completed",
+      warning: "Sandbox changes were applied; marked the request complete after file activity settled.",
+    })
+  })
 })
 
 function createSocket() {
@@ -219,6 +242,7 @@ function createState(): TestBridgeState & {
     pendingThreadTimer: null,
     activeOperation: null,
     activeRequestTimer: null,
+    syntheticCompletionTimer: null,
     activeAppServerGeneration: null,
     persistence: {
       currentThreadId: null,

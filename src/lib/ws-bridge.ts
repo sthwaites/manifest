@@ -31,6 +31,7 @@ type ClientMessage = {
 }
 
 type BridgeOperation = "feature" | "rollback" | "reset" | "image"
+const SANDBOX_CHANGE_SETTLE_MS = 4_000
 
 export type BridgeState = {
   started: boolean
@@ -41,6 +42,7 @@ export type BridgeState = {
   pendingThreadTimer: ReturnType<typeof setTimeout> | null
   activeOperation: BridgeOperation | null
   activeRequestTimer: ReturnType<typeof setTimeout> | null
+  syntheticCompletionTimer: ReturnType<typeof setTimeout> | null
   activeAppServerGeneration: number | null
   persistence: PersistenceState
 }
@@ -62,6 +64,7 @@ export function ensureWebSocketBridge() {
     pendingThreadTimer: null,
     activeOperation: null,
     activeRequestTimer: null,
+    syntheticCompletionTimer: null,
     activeAppServerGeneration: null,
     persistence: createPersistenceState(),
   }
@@ -252,7 +255,7 @@ function startServerIfAvailable(sandboxDir: string) {
   }
 }
 
-async function handleAppServerEvent(event: AppServerEvent, state: BridgeState, sandboxDir: string) {
+export async function handleAppServerEvent(event: AppServerEvent, state: BridgeState, sandboxDir: string) {
   const method = event.method ?? event.type
   if (isStaleAppServerEvent(event, state)) return
   const params = typeof event.params === "object" && event.params ? event.params : event
@@ -305,6 +308,11 @@ async function handleAppServerEvent(event: AppServerEvent, state: BridgeState, s
     return
   }
 
+  if (method === "fileChange") {
+    scheduleSyntheticCompletion(state, sandboxDir)
+    return
+  }
+
   if (method === "turn/completed") {
     releaseBridgeOperation(state)
   }
@@ -344,6 +352,22 @@ function scheduleActiveRequestTimeout(state: BridgeState, sandboxDir: string, er
   }, 120_000)
 }
 
+function scheduleSyntheticCompletion(state: BridgeState, sandboxDir: string) {
+  if (state.syntheticCompletionTimer) clearTimeout(state.syntheticCompletionTimer)
+  state.syntheticCompletionTimer = setTimeout(() => {
+    if (state.activeOperation !== "feature") return
+    if (!state.persistence.activeFeatureId || !hasSandboxChanges(state, sandboxDir)) return
+    eventBus.emit("app-server-event", {
+      method: "turn/completed",
+      params: {
+        threadId: state.currentThreadId,
+        turn: { id: "file-change-settled", status: "completed" },
+      },
+      warning: "Sandbox changes were applied; marked the request complete after file activity settled.",
+    })
+  }, SANDBOX_CHANGE_SETTLE_MS)
+}
+
 function clearPendingThreadStart(state: BridgeState) {
   state.pendingInputs = []
   if (state.pendingThreadTimer) clearTimeout(state.pendingThreadTimer)
@@ -367,8 +391,10 @@ function acquireBridgeOperation(state: BridgeState, operation: BridgeOperation) 
 function releaseBridgeOperation(state: BridgeState) {
   if (state.pendingThreadTimer) clearTimeout(state.pendingThreadTimer)
   if (state.activeRequestTimer) clearTimeout(state.activeRequestTimer)
+  if (state.syntheticCompletionTimer) clearTimeout(state.syntheticCompletionTimer)
   state.pendingThreadTimer = null
   state.activeRequestTimer = null
+  state.syntheticCompletionTimer = null
   state.activeOperation = null
   state.activeAppServerGeneration = null
 }

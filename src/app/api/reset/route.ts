@@ -27,7 +27,7 @@ export async function POST() {
     execSync("git clean -fd", { cwd: sandboxDir })
     resetWebSocketBridgeState()
     restartAppServer(sandboxDir)
-    await requestSandboxRestart(sandboxDir)
+    await requestSandboxRestart(sandboxDir, { clearCache: true })
   } catch (error) {
     endBridgeOperation("reset")
     return Response.json({ error: "Reset failed", detail: errorDetail(error) }, { status: 500 })
