@@ -13,7 +13,7 @@ on:
 permissions:
   contents: read
   issues: write
-  pull-requests: read
+  pull-requests: write
 
 jobs:
   review:
@@ -29,6 +29,7 @@ jobs:
         id: pr
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           EVENT_NAME: ${{ github.event_name }}
           COMMENT_PR: ${{ github.event.issue.number }}
           INPUT_PR: ${{ inputs.pr_number }}
@@ -36,17 +37,26 @@ jobs:
           set -euo pipefail
           pr_number="${INPUT_PR:-$COMMENT_PR}"
           base_ref="$(gh pr view "$pr_number" --json baseRefName --jq .baseRefName)"
+          is_cross_repository="$(gh pr view "$pr_number" --json isCrossRepository --jq .isCrossRepository)"
           echo "number=$pr_number" >> "$GITHUB_OUTPUT"
           echo "base_ref=$base_ref" >> "$GITHUB_OUTPUT"
+          echo "is_cross_repository=$is_cross_repository" >> "$GITHUB_OUTPUT"
 
       - name: Check out pull request
         uses: actions/checkout@v5
         with:
           ref: refs/pull/${{ steps.pr.outputs.number }}/head
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Fetch base branch
-        run: git fetch origin ${{ steps.pr.outputs.base_ref }} --depth=1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git fetch \
+            "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" \
+            "+refs/heads/${{ steps.pr.outputs.base_ref }}:refs/remotes/origin/${{ steps.pr.outputs.base_ref }}" \
+            --depth=1
 
       - name: Install Codex CLI
         run: npm install -g @openai/codex
@@ -62,10 +72,15 @@ jobs:
             printf '%s\n' 'Codex review could not run because neither `CODEX_API_KEY` nor `OPENAI_API_KEY` is configured as a repository secret.' > codex-review.md
             exit 0
           fi
+          if [ "${{ steps.pr.outputs.is_cross_repository }}" = "true" ]; then
+            printf '%s\n' 'Codex review was skipped because this pull request comes from a fork. Run the review manually after inspecting the changes, or use a same-repository branch.' > codex-review.md
+            exit 0
+          fi
 
-          codex review \
+          codex --dangerously-bypass-approvals-and-sandbox \
+            -c 'shell_environment_policy.exclude=["OPENAI_API_KEY","CODEX_API_KEY","GH_TOKEN","GITHUB_TOKEN"]' \
+            review \
             --base "origin/${{ steps.pr.outputs.base_ref }}" \
-            "Review this Manifest pull request for correctness, test coverage, Docker/runtime risks, security issues, and publication readiness. Lead with actionable findings and include file references." \
             > codex-review.md
 
       - name: Comment with Codex review
